@@ -10,6 +10,16 @@ description: >
 
 A single smart command that collects, analyzes, and syncs your mentions to Linear.
 
+> **CRITICAL: Config Location**
+>
+> All configuration and state MUST be stored in the **current working directory**, not the plugin directory.
+> The plugin directory is read-only when installed from a marketplace.
+>
+> Config path: `{current_working_directory}/.pings-triage/config.json`
+> State path: `{current_working_directory}/.pings-triage/state.json`
+>
+> Always use `os.getcwd()` as the base path. **Never** attempt to write to the plugin/skill directory.
+
 ## Before You Start
 
 Check if configured by looking for `.pings-triage/config.json` in the current working directory. If missing or invalid, tell the user:

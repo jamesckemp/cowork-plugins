@@ -1,6 +1,6 @@
 {
   "name": "pings-triage",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Smart notification triage that collects mentions from Slack, P2, and Figma, analyzes what's needed, and syncs to Linear. One command to stay on top of your pings.",
   "author": {
     "name": "James Kemp"
