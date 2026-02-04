@@ -33,7 +33,7 @@ Guides you through initial setup or updates to existing configuration:
 
 ## Configuration saved to
 
-`config/user-config.json` in the plugin directory
+`.pings-triage/config.json` in your current working directory
 
 ## Important: Linear team selection
 
@@ -43,11 +43,7 @@ Creating issues in public teams risks exposing private information to your entir
 
 ## After setup
 
-Once configured, you can run:
-- `/triage` - Complete workflow
-- `/fetch` - Collect pings
-- `/analyze` - Analyze pings
-- `/sync` - Sync to Linear
+Once configured, run `/pings` to collect, analyze, and sync your mentions to Linear.
 
 ## Re-running setup
 
