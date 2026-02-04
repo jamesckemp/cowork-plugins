@@ -24,7 +24,7 @@ class ConfigManager:
     """Manages plugin configuration and state stored in working folder."""
 
     DEFAULT_CONFIG = {
-        "version": "3.1.0",
+        "version": "3.1.1",
         "linear": {
             "team_id": "",
             "user_id": "",
@@ -48,7 +48,7 @@ class ConfigManager:
             "threads": {},
             "synced_urls": [],
             "metadata": {
-                "version": "3.1.0",
+                "version": "3.1.1",
                 "created_at": None
             }
         }
@@ -69,6 +69,7 @@ class ConfigManager:
         self.config_dir = self.base_path / ".pings-triage"
         self.config_file = self.config_dir / "config.json"
         self.config = self._load_config()
+        self._session_timestamp = None  # Lazy initialized for session folders
 
         # Migrate from state.json if it exists
         self._migrate_from_state_json()
@@ -135,6 +136,36 @@ class ConfigManager:
             logger.warning(f"Permission denied saving config: {e}. Changes may not persist.")
         except IOError as e:
             logger.warning(f"IO error saving config: {e}. Changes may not persist.")
+
+    def get_session_path(self) -> Path:
+        """
+        Get or create current session folder in working directory.
+
+        Session folders are created at the working folder root (not inside
+        .pings-triage) with timestamp format YYYY-MM-DD_HHMM. The timestamp
+        is set once per ConfigManager instance, so all files from one triage
+        run go in the same folder.
+
+        Returns:
+            Path to the session folder (created if it doesn't exist)
+        """
+        if self._session_timestamp is None:
+            self._session_timestamp = datetime.now().strftime("%Y-%m-%d_%H%M")
+        session_dir = self.base_path / self._session_timestamp
+        session_dir.mkdir(parents=True, exist_ok=True)
+        return session_dir
+
+    def get_session_file(self, filename: str) -> Path:
+        """
+        Get path for a file in the current session folder.
+
+        Args:
+            filename: Name of the file (e.g., "triage_summary.md")
+
+        Returns:
+            Full path to the file in the session folder
+        """
+        return self.get_session_path() / filename
 
     def exists(self) -> bool:
         """Check if config file exists."""

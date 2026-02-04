@@ -19,6 +19,20 @@ A single smart command that collects, analyzes, and syncs your mentions to Linea
 >
 > Always use `os.getcwd()` as the base path. **Never** attempt to write to the plugin/skill directory.
 
+> **Session Folders for Outputs**
+>
+> Reports, exports, and other output files should go in session folders at the working directory root.
+> Session folders use the format `YYYY-MM-DD_HHMM` (e.g., `2024-01-15_1430/`).
+>
+> ```python
+> # Get path for a file in the current session folder
+> report_path = config.get_session_file("triage_summary.md")
+> export_path = config.get_session_file("batch_issues.json")
+> ```
+>
+> The session timestamp is set once per ConfigManager instance, so all files from one triage run
+> go in the same folder. Config stays in `.pings-triage/config.json` (unchanged).
+
 ## Before You Start
 
 Check if configured by looking for `.pings-triage/config.json` in the current working directory. If missing or invalid, tell the user:
