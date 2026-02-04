@@ -1,13 +1,12 @@
 {
   "mcpServers": {
     "context-a8c": {
-      "required": true,
-      "description": "Required for accessing Slack, P2, and Linear at Automattic",
-      "providers": ["slack", "wpcom", "linear"]
+      "command": "npx",
+      "args": ["-y", "@automattic/mcp-context-a8c"]
     },
-    "gmail": {
-      "required": false,
-      "description": "Optional: for accessing Figma notifications via email"
+    "figma": {
+      "type": "http",
+      "url": "https://mcp.figma.com/mcp"
     }
   }
 }
