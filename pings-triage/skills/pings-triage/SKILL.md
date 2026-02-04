@@ -1,451 +1,271 @@
 ---
 name: pings-triage
-description: Intelligent notification triage system for managing mentions across Slack, P2, and Figma. Use when the user wants to collect their pings, organize notifications, triage mentions, check their inbox, or manage their Linear triage issues. Automatically deduplicates threads, detects existing responses, and creates organized Linear issues with proper categorization and priority.
+description: >
+  Smart triage for mentions across Slack, P2, and Figma. Collects pings, analyzes what's needed,
+  and syncs to Linear in one command. Use when the user says "triage my pings", "check my mentions",
+  "organize my notifications", or runs /pings.
 ---
 
 # Pings Triage
 
-## Overview
+A single smart command that collects, analyzes, and syncs your mentions to Linear.
 
-This skill helps you collect, analyze, and organize pings (mentions and notifications) from multiple platforms: Slack, P2, and Figma. It solves the common problem of duplicate Linear issues for threaded conversations and automatically detects when you've already responded to messages.
+## Before You Start
 
-**Core capabilities:**
-- Collects mentions from Slack and P2 (via context-a8c MCP) and Figma (via Gmail)
-- Deduplicates threaded conversations - no more duplicate issues for follow-up comments
-- Analyzes each ping to determine action needed (Reply, Review, Acknowledge, Decide, Delegate) and priority (0-4)
-- Detects when you've already responded and auto-closes corresponding Linear issues
-- Creates organized Linear issues in your private team with full context and links back to source
-- Tracks state between runs to avoid re-processing
+Check if configured by looking for `.pings-triage/config.json` in the current working directory. If missing or invalid, tell the user:
 
-## Quick Commands
+> I need to set up pings triage first. Run `/setup` to configure your Linear team and preferences.
 
-The plugin supports running individual workflow steps or the complete triage process:
+Then stop execution.
 
-### Complete Triage (Recommended)
-**Trigger**: "triage my pings", "run triage", "organize my notifications"
+---
 
-Runs the full workflow:
-1. **FETCH**: Collect pings from all enabled platforms
-2. **DEDUPE**: Group threads and check for existing responses
-3. **ANALYZE**: Categorize and prioritize each ping
-4. **SYNC**: Create/update/close Linear issues
+## Phase 1: Initialize
 
-### Individual Commands
+Load the required MCP providers:
 
-**FETCH**: "fetch my pings", "collect notifications"
-- Only collects new pings from platforms
-- Updates state with new mentions
-- Useful for just gathering data without analysis
+```
+mcp__context-a8c__context-a8c-load-provider(provider="slack")
+mcp__context-a8c__context-a8c-load-provider(provider="wpcom")
+mcp__context-a8c__context-a8c-load-provider(provider="linear")
+```
 
-**ANALYZE**: "analyze my pings", "categorize pings"
-- Only analyzes unprocessed pings
-- Determines action and priority
-- Doesn't create Linear issues yet
+If any provider fails to load, tell the user which one failed and suggest they check their MCP connections.
 
-**SYNC**: "sync to linear", "update linear"
-- Only syncs analyzed pings to Linear
-- Creates new issues, updates existing, closes responded
-- Useful after reviewing analysis results
-
-**SETUP**: "setup triage", "configure pings"
-- Initial configuration wizard
-- Set Linear team, user context, platform settings
-- See `setup-triage` skill for details
-
-### Using Workflow Commands
-
-The workflow commands helper provides Python functions for each command:
+Load the config and state using the Python helpers:
 
 ```python
-from scripts.workflow_commands import TriageWorkflow
+from scripts.state_manager import ConfigManager, StateManager
+import os
 
-workflow = TriageWorkflow()
+base_path = os.getcwd()
+config = ConfigManager(base_path)
+state = StateManager(base_path)
 
-# Run individual commands
-fetch_results = execute_fetch(workflow)
-dedupe_results = execute_dedupe(workflow)
-analyze_results = execute_analyze(workflow)
-sync_results = execute_sync(workflow)
+if not config.is_valid():
+    print("Config not found or invalid. Run /setup first.")
+    return
 
-# Or run complete triage
-triage_results = execute_triage(workflow)
+enabled_platforms = config.get_enabled_platforms()
+user_name = config.get("user.name")
+linear_team = config.get("linear.team_id")
 ```
 
-## Workflow
+---
 
-### 1. Initialize and Load Configuration
+## Phase 2: Collect Pings
 
-First, load the user configuration to get Linear team ID and platform settings:
+For each enabled platform, fetch mentions since the last fetch (or last 30 days for first run).
 
-```python
-import json
-from pathlib import Path
+### Slack Collection
 
-# Load user config
-config_path = Path(__file__).parent.parent / "config" / "user-config.json"
-with open(config_path) as f:
-    config = json.load(f)
-
-linear_team_id = config["linear"]["team_id"]
-platforms = config["platforms"]
-user_info = config["user"]
-```
-
-### 2. Load Required MCPs
-
-The skill requires two MCPs:
+If `slack` is enabled:
 
 ```
-1. context-a8c MCP for Slack and P2 access
-2. Linear MCP for issue management
-```
-
-Check if they're available and load them:
-```
-mcp__context-a8c__context-a8c-load-provider with provider="slack"
-mcp__context-a8c__context-a8c-load-provider with provider="wpcom"
-```
-
-### 3. Collect Pings from Platforms
-
-Use the state manager to track what's been collected:
-
-```python
-from scripts.state_manager import StateManager
-
-sm = StateManager()
-
-# Get last sync times
-last_slack_sync = sm.get_last_sync("slack")
-last_p2_sync = sm.get_last_sync("p2")
-```
-
-#### Slack Collection
-
-Use context-a8c MCP tools to search for mentions:
-
-```
-Tool: mcp__context-a8c__context-a8c-execute-tool
-Parameters:
-  provider: "slack"
-  tool: "search-messages"
-  params: {
-    query: "mentions:@jamesckemp",
-    after: <last_sync_timestamp>
-  }
+mcp__context-a8c__context-a8c-execute-tool(
+    provider="slack",
+    tool="search-messages",
+    params={
+        "query": f"mentions:@{user_name}",
+        "after": state.get_fetch_start_date("slack")
+    }
+)
 ```
 
 For each message found:
-1. Extract message metadata (channel, timestamp, author, content, thread_ts)
-2. Generate thread_id using format: `slack-{channel_id}-{thread_ts}`
-3. Check if message has existing replies from user
-4. Add to state manager:
+1. Generate thread_id: `slack-{channel_id}-{thread_ts or ts}`
+2. Check if user already replied in the thread
+3. Add to state:
 
 ```python
-ping_id = sm.add_ping(
+ping_id = state.add_ping(
     platform="slack",
     message_id=msg["ts"],
     timestamp=msg["timestamp"],
-    author=msg["user"],
+    author=msg["user_name"],
     content=msg["text"],
     thread_id=thread_id,
     metadata={
         "channel_id": msg["channel"],
         "channel_name": msg["channel_name"],
-        "permalink": msg["permalink"],
-        "reactions": msg.get("reactions", [])
+        "permalink": msg["permalink"]
+    }
+)
+
+if user_already_replied:
+    state.mark_ping_responded(ping_id)
+```
+
+Update last_fetch after successful collection:
+```python
+state.set_last_fetch("slack")
+```
+
+### P2 Collection
+
+If `p2` is enabled:
+
+```
+mcp__context-a8c__context-a8c-execute-tool(
+    provider="wpcom",
+    tool="search-mentions",
+    params={
+        "user": user_name,
+        "after": state.get_fetch_start_date("p2")
     }
 )
 ```
 
-#### P2 Collection
+For each mention:
+1. Generate thread_id: `p2-{site_id}-{post_id}`
+2. Check if user already commented/liked
+3. Add to state with similar pattern as Slack
 
-Similarly collect from P2:
-
-```
-Tool: mcp__context-a8c__context-a8c-execute-tool
-Parameters:
-  provider: "wpcom"
-  tool: "search-posts"
-  params: {
-    mentions: "jamesckemp",
-    after: <last_sync_timestamp>
-  }
-```
-
-Generate thread_id using format: `p2-{site_id}-{post_id}`
-
-#### Figma Collection (Optional)
-
-If Gmail MCP available, search for Figma notification emails:
-
-```
-Tool: search_gmail_messages
-Parameters:
-  query: "from:figma.com (mentioned OR comment)",
-  time_min: <last_sync_timestamp>
-```
-
-Parse email body to extract file link and comment details.
-
-### 4. Detect Responses and Deduplicate
-
-For each ping, check if user has already responded:
-
-**Slack:**
-- Fetch thread messages
-- Look for messages from user posted after the mention timestamp
-- Check if user reacted to the message
-
-**P2:**
-- Fetch post/comment replies
-- Look for comments from user after the mention
-- Check for user likes
-
-**Figma:**
-- Check if user replied to comment (requires Figma API or manual detection)
-
-Mark pings as handled if response detected:
+Update last_fetch after successful collection:
 ```python
-if user_responded:
-    sm.mark_ping_responded(ping_id)
+state.set_last_fetch("p2")
 ```
 
-For threaded conversations:
-- Group pings by thread_id
-- Only create ONE Linear issue per thread
-- Update issue when new messages arrive in thread
+### Figma Collection (if enabled)
 
-### 5. Analyze Pings
-
-For each unprocessed ping, analyze using the analysis prompt logic.
-
-Load the analysis prompt from references:
-
-```python
-# Read analysis-prompt.md for detailed instructions
-```
-
-For each ping:
-
-```python
-from scripts.ping_analyzer import PingAnalyzer
-
-analyzer = PingAnalyzer()
-
-# Get thread context if applicable
-thread_pings = sm.get_thread_pings(ping["thread_id"]) if ping["thread_id"] else []
-
-# Format for analysis
-formatted = analyzer.format_for_analysis(ping, thread_context=thread_pings[:-1])
-
-# Present to Claude for analysis (Claude should follow analysis-prompt.md)
-# Expected output format:
-analysis = {
-    "title": "Author Name: Action needed",
-    "summary": "Brief summary of what the author said/needs",
-    "suggested_action": "Acknowledge|Review|Reply|Decide|Delegate",
-    "priority": 0-4,
-    "specific_guidance": "Additional context or notes"
-}
-
-# Validate and normalize
-if analyzer.validate_analysis(analysis):
-    normalized = analyzer.normalize_analysis(analysis)
-    sm.update_ping_analysis(ping_id, normalized)
-```
-
-**Analysis Guidelines:**
-
-See `references/analysis-prompt.md` for complete analysis instructions. Key points:
-
-- Default priority is 3 (Normal) unless urgency signals present
-- Suggested actions: Acknowledge, Review, Reply, Decide, Delegate
-- Priority 1 = Urgent (blocking, deadline today)
-- Priority 2 = High (deadline this week, time-sensitive)
-- Priority 4 = Low (FYI only, no response needed)
-
-### 6. Sync with Linear
-
-For each analyzed ping, create or update Linear issue.
-
-See `references/linear-template.md` for issue format details.
-
-**Creating New Issue:**
-
-```
-Tool: mcp__9de9bba7-6263-489c-b945-4616c5232220__create_issue
-Parameters:
-  team: <linear_team_id from config>
-  title: <analysis.title>
-  description: <formatted description with summary, action, guidance, metadata>
-  state: "Triage"
-  assignee: <user_id>
-  priority: <analysis.priority>
-  labels: [<ping_id as label>]
-```
-
-**Issue Description Format:**
-
-```
-{analysis.summary}
+Figma mentions come through email notifications. If the Gmail MCP is available, search for Figma notification emails and extract mention details.
 
 ---
 
-**Action:** {analysis.suggested_action}
+## Phase 3: Analyze
 
-{analysis.specific_guidance (if not empty)}
+Get all unanalyzed pings and process them using the analysis prompt from `references/analysis-prompt.md`.
+
+```python
+unanalyzed = state.get_unanalyzed_pings()
+if not unanalyzed:
+    print("No new pings to analyze.")
+```
+
+For each ping, read the analysis prompt and substitute variables:
+- `{USER_NAME}` → config.get("user.name")
+- `{USER_CONTEXT}` → config.get_user_context()
+
+Then analyze the ping content to determine:
+
+| Field | Description |
+|-------|-------------|
+| **title** | `{Author Name}: {Brief action description}` |
+| **summary** | What they need from you in 1-2 sentences |
+| **suggested_action** | One of: Acknowledge, Review, Reply, Decide, Delegate |
+| **priority** | 0-4 (see analysis-prompt.md for rules) |
+| **specific_guidance** | Additional context if needed |
+
+Store the analysis:
+```python
+state.update_ping_analysis(ping_id, {
+    "title": title,
+    "summary": summary,
+    "suggested_action": action,
+    "priority": priority,
+    "specific_guidance": guidance,
+    "analyzed_at": datetime.now().isoformat()
+})
+```
 
 ---
 
-**Metadata:**
-- [View in {platform}]({link})
-- Platform: {platform}
-- Thread ID: {thread_id}
-- Ping ID: {ping_id}
-```
+## Phase 4: Sync to Linear
 
-**Threading Strategy:**
+Sync analyzed pings to Linear using the format from `references/linear-template.md`.
 
-For pings in same thread:
-1. Check if thread already has Linear issue (from state)
-2. If yes: Update existing issue with comment about new message
-3. If no: Create new issue and link to thread
+### For new pings (no Linear issue yet):
 
+Check if this ping's thread already has a Linear issue:
 ```python
-thread = sm.state["threads"].get(thread_id)
-if thread and thread.get("linear_issue_id"):
-    # Update existing issue
-    existing_issue_id = thread["linear_issue_id"]
-    # Add comment about new message in thread
-else:
-    # Create new issue
-    # Link to state manager
-    sm.link_linear_issue(ping_id, linear_issue_id)
+existing_issue = state.get_thread_linear_issue(ping["thread_id"])
 ```
 
-**Auto-Closing Issues:**
+**If thread has existing issue**: Add a comment to that issue about the new message.
 
-For pings where response was detected:
-
-```
-Tool: mcp__9de9bba7-6263-489c-b945-4616c5232220__update_issue
-Parameters:
-  id: <linear_issue_id>
-  state: "Done"
-```
-
-Add comment explaining auto-close:
-```
-Tool: mcp__9de9bba7-6263-489c-b945-4616c5232220__create_comment
-Parameters:
-  issueId: <linear_issue_id>
-  body: "Automatically closed: Reply detected on {platform}"
-```
-
-### 7. Present Results
-
-Show user a summary of what was processed:
+**If no existing issue**: Create a new one:
 
 ```
-## Pings Triage Results
+mcp__context-a8c__context-a8c-execute-tool(
+    provider="linear",
+    tool="create-issue",
+    params={
+        "teamId": config.get("linear.team_id"),
+        "title": analysis["title"],
+        "description": format_description(analysis, ping),
+        "priority": analysis["priority"]
+    }
+)
+```
+
+Link the issue to the ping:
+```python
+state.link_linear_issue(ping_id, issue["id"])
+```
+
+### For responded pings:
+
+If response was detected and issue exists, close it:
+
+```
+mcp__context-a8c__context-a8c-execute-tool(
+    provider="linear",
+    tool="update-issue",
+    params={
+        "id": ping["linear_issue_id"],
+        "stateId": "done_state_id"  # Get from team states
+    }
+)
+```
+
+---
+
+## Phase 5: Present Results
+
+Show a user-friendly summary:
+
+```markdown
+## Pings Triage Complete
 
 **Collected:**
 - Slack: X new mentions
 - P2: Y new mentions
-- Figma: Z new notifications
 
-**Analysis:**
-- Priority 1 (Urgent): N pings
-- Priority 2 (High): N pings
-- Priority 3 (Normal): N pings
-- Priority 4 (Low): N pings
+**Analyzed:**
+- Priority 1 (Urgent): N
+- Priority 2 (High): N
+- Priority 3 (Normal): N
+- Priority 4 (Low): N
 
-**Actions:**
+**Synced:**
 - Created X new Linear issues
-- Updated Y existing issues
-- Auto-closed Z issues (responses detected)
+- Updated Y existing threads
+- Auto-closed Z responded issues
 
-**Your Linear triage inbox:**
-[Link to Linear team inbox]
+**Next:** [Open your Linear triage inbox →](https://linear.app/team/{team_id}/triage)
 ```
 
-## Configuration
+If no new pings were found:
 
-### User Configuration
+> You're all caught up! No new mentions since your last triage.
 
-Edit `config/user-config.json` to customize:
+---
 
-- **linear.team_id**: Your Linear team ID (CRITICAL - must be your private team)
-- **platforms**: Enable/disable each platform and set lookback period
-- **analysis.auto_close_responded**: Auto-close issues when responses detected
-- **user**: Your name, email, and role for analysis context
+## Error Handling
 
-### State Management
+If something fails during execution:
 
-State is persisted in `~/.pings-triage/state.json` and tracks:
-- All collected pings with analysis
-- Thread groupings
-- Linear issue mappings
-- Last sync timestamps
-- Response detection status
+1. **MCP provider won't load**: Tell user which provider failed, suggest checking MCP connections
+2. **No config found**: Direct to `/setup`
+3. **Linear API error**: Show the error, suggest checking team ID in config
+4. **Platform fetch fails**: Continue with other platforms, note which one failed
 
-State is automatically managed by `state_manager.py`.
+Never expose technical details like stack traces or raw API errors. Translate to user-friendly messages.
 
-## Scripts
-
-### state_manager.py
-Manages persistent state database. Tracks pings, threads, Linear issues, and sync timestamps.
-
-Key methods:
-- `add_ping()`: Add new ping to state
-- `update_ping_analysis()`: Store analysis results
-- `mark_ping_responded()`: Mark ping as handled
-- `link_linear_issue()`: Connect ping to Linear issue
-- `get_thread_pings()`: Get all pings in a thread
-
-### ping_analyzer.py
-Formats pings for analysis and validates results.
-
-Key methods:
-- `format_for_analysis()`: Prepare ping for LLM analysis
-- `validate_analysis()`: Ensure analysis has required fields
-- `extract_urgency_signals()`: Detect urgency keywords
-- `normalize_analysis()`: Standardize analysis format
+---
 
 ## References
 
-### analysis-prompt.md
-Complete instructions for analyzing pings. Defines voice/tone, action types, priority rules, and output format. **Read this file when performing analysis.**
-
-### linear-template.md
-Defines Linear issue structure, including title format, description layout, status, priority mapping, threading strategy, and auto-close rules. **Reference when creating/updating Linear issues.**
-
-### platform-guide.md
-Technical guide for interacting with each platform (Slack, P2, Figma). Covers MCP tool usage, response detection, thread identification, and metadata extraction. **Reference when collecting pings or checking responses.**
-
-## Troubleshooting
-
-**No pings collected:**
-- Verify MCPs are connected (context-a8c, Linear)
-- Check last_sync timestamps in state
-- Verify platform configurations are enabled
-
-**Duplicate Linear issues:**
-- Check that thread_id is being generated correctly
-- Verify state manager is tracking threads properly
-- Ensure existing issue lookup is working
-
-**Wrong Linear team:**
-- CRITICAL: Verify linear.team_id in config matches your private team
-- Never create issues in public teams - privacy risk
-
-**Analysis errors:**
-- Ensure analysis-prompt.md is being followed
-- Validate analysis output has all required fields
-- Check priority is 0-4 integer
-
-**Response detection not working:**
-- Verify platform API access for reading threads
-- Check timestamp comparison logic
-- Ensure user ID matching is correct
+- `references/analysis-prompt.md` - Complete analysis logic and output format
+- `references/linear-template.md` - Linear issue formatting and threading strategy
+- `references/platform-guide.md` - Platform-specific MCP tool details

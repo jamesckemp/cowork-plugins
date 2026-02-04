@@ -1,17 +1,11 @@
 {
   "name": "pings-triage",
-  "version": "2.0.0",
-  "description": "Intelligent notification triage system that collects, deduplicates, and organizes pings from Slack, P2, and Figma. Analyzes urgency and suggests actions while preventing duplicate Linear issues for threaded conversations.",
+  "version": "3.0.0",
+  "description": "Smart notification triage that collects mentions from Slack, P2, and Figma, analyzes what's needed, and syncs to Linear. One command to stay on top of your pings.",
   "author": "James Kemp",
   "compatibility": {
     "product": "cowork",
     "mcps": ["context-a8c"],
     "optional_mcps": ["gmail"]
-  },
-  "configuration": {
-    "linear_team_id": "JCK",
-    "platforms": ["slack", "p2", "figma"],
-    "sync_interval_hours": 1,
-    "auto_close_responded": true
   }
 }

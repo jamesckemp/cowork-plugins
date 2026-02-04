@@ -1,221 +1,286 @@
 ---
 name: setup-triage
-description: Configure the Pings Triage plugin. Use when the user wants to set up triage, configure their Linear team, update analysis settings, customize the user context, or modify plugin settings. Triggers include "setup triage", "configure pings", "change my Linear team", "update triage settings".
+description: >
+  Configure pings triage - set up your Linear team, user context, and platform preferences.
+  Use when the user says "setup triage", "configure pings", runs /setup, or when /pings
+  reports missing configuration.
 ---
 
 # Setup Triage
 
-## Overview
+Interactive wizard to configure pings triage. Uses AskUserQuestion for all user input with Skip options.
 
-This skill helps you configure the Pings Triage plugin for first-time setup or updates to your settings.
+---
 
-## Configuration File Location
+## Phase 1: Detect Existing Config
 
-The configuration is stored at:
-```
-pings-triage-plugin/config/user-config.json
-```
-
-## Setup Workflow
-
-### 1. Find User's Linear Team
-
-First, help the user identify their Linear team ID. This is **CRITICAL** - the team must be their private team to avoid exposing private information.
-
-Load the Linear provider:
-```
-mcp__context-a8c__context-a8c-load-provider with provider="linear"
-```
-
-List available teams:
-```
-Tool: mcp__context-a8c__context-a8c-execute-tool
-Parameters:
-  provider: "linear"
-  tool: "list-teams"
-  params: {}
-```
-
-Ask the user to identify their **private personal team** from the list. Explain:
-- This MUST be their private team, not a shared team
-- Creating issues in public teams risks exposing private information
-- Look for a team with their name or "Personal" in the title
-
-### 2. Gather User Context
-
-Collect information about the user to personalize the analysis:
-
-Ask:
-1. **Name**: What's your full name?
-2. **Email**: What's your email address?
-3. **Role/Title**: What's your role? (e.g., "Core Product Manager for WooCommerce")
-4. **Responsibilities**: What are you responsible for? What types of mentions do you typically receive?
-5. **Decision Authority**: What decisions can you make? What should you delegate?
-6. **Context Notes**: Any other context that would help analyze your pings?
-
-Example user context:
-```
-- Core Product Manager responsible for WooCommerce product direction and roadmap
-- Makes product decisions, not technical implementation decisions
-- May be tagged for: product decisions, awareness/FYI, escalations
-- Not responsible for: technical implementation, customer support, non-WooCommerce products
-```
-
-### 3. Configure Platforms
-
-Ask which platforms they want to enable:
-
-- **Slack**: Enable? Lookback hours? (default: 24)
-- **P2**: Enable? Lookback hours? (default: 24)
-- **Figma**: Enable? (requires Gmail MCP)
-
-### 4. Update Configuration File
-
-Read the current config:
-```python
-import json
-from pathlib import Path
-
-config_path = Path("pings-triage-plugin/config/user-config.json")
-with open(config_path) as f:
-    config = json.load(f)
-```
-
-Update with user's settings:
-```python
-config["linear"]["team_id"] = user_linear_team_id
-config["user"]["name"] = user_name
-config["user"]["email"] = user_email
-config["user"]["role"] = user_role
-config["user"]["context"] = user_context_description
-
-config["platforms"]["slack"]["enabled"] = slack_enabled
-config["platforms"]["slack"]["lookback_hours"] = slack_hours
-config["platforms"]["p2"]["enabled"] = p2_enabled
-config["platforms"]["p2"]["lookback_hours"] = p2_hours
-config["platforms"]["figma"]["enabled"] = figma_enabled
-```
-
-Save the updated config:
-```python
-with open(config_path, 'w') as f:
-    json.dump(config, f, indent=2)
-```
-
-### 5. Verify MCP Connections
-
-Verify that required MCPs are connected:
-
-```
-✓ context-a8c MCP - Required for Slack, P2, and Linear
-✓ Gmail MCP - Optional, needed for Figma notifications
-```
-
-If context-a8c is not available, guide the user to connect it.
-
-### 6. Initialize State
-
-Initialize the state database if this is first-time setup:
+Check if config already exists:
 
 ```python
-from pings-triage-plugin.skills.pings-triage.scripts.state_manager import StateManager
+from scripts.state_manager import ConfigManager
+import os
 
-sm = StateManager()
-print(f"State initialized at: {sm.state_file}")
-print(f"Stats: {sm.get_stats()}")
+config = ConfigManager(os.getcwd())
+is_reconfiguring = config.exists()
 ```
 
-### 7. Confirm Setup
+If reconfiguring, tell the user:
 
-Show the user a summary of their configuration:
+> I found your existing configuration. I'll walk through the settings - skip any you want to keep unchanged.
+
+If first time:
+
+> Let's set up pings triage. I'll ask a few questions to configure your preferences.
+
+---
+
+## Phase 2: Load Linear Teams
+
+Load the Linear provider and fetch available teams:
 
 ```
-✓ Setup Complete!
+mcp__context-a8c__context-a8c-load-provider(provider="linear")
 
-**Linear Configuration:**
+mcp__context-a8c__context-a8c-execute-tool(
+    provider="linear",
+    tool="list-teams",
+    params={}
+)
+```
+
+If Linear provider fails:
+
+> I couldn't connect to Linear. Make sure the context-a8c MCP is configured and try again.
+
+Stop execution.
+
+---
+
+## Phase 3: Linear Team Selection
+
+Present the teams using AskUserQuestion. Format teams as options showing name and key.
+
+**Important**: Warn about using private teams. Add "(Personal)" or "(Recommended)" to teams that appear to be personal.
+
+```
+AskUserQuestion({
+    questions: [{
+        question: "Which Linear team should receive your triage issues? Choose your private/personal team to keep your pings confidential.",
+        header: "Linear team",
+        options: [
+            { label: "JCK - James Kemp Personal (Recommended)", description: "Your private team - keeps pings confidential" },
+            { label: "WOO - WooCommerce", description: "Shared team - others can see your pings" },
+            // ... other teams
+        ],
+        multiSelect: false
+    }]
+})
+```
+
+Store the selected team ID:
+```python
+config.set("linear.team_id", selected_team_id)
+```
+
+---
+
+## Phase 4: User Context
+
+Gather user context for personalized analysis. Use AskUserQuestion with Skip options - user can provide custom text via the "Other" option.
+
+### 4.1 Name and Email
+
+If reconfiguring and values exist, show current values in the description.
+
+```
+AskUserQuestion({
+    questions: [{
+        question: "What's your name? This helps personalize the analysis.",
+        header: "Your name",
+        options: [
+            { label: "James Kemp", description: "Use this name" },
+            // If reconfiguring, current value as first option
+        ],
+        multiSelect: false
+    }]
+})
+```
+
+```python
+config.set("user.name", user_name)
+config.set("user.email", user_email)  # Can be gathered similarly or skipped
+```
+
+### 4.2 Role
+
+```
+AskUserQuestion({
+    questions: [{
+        question: "What's your role? This helps determine what types of pings need your attention.",
+        header: "Your role",
+        options: [
+            { label: "Product Manager", description: "Product decisions and roadmap" },
+            { label: "Engineering Lead", description: "Technical decisions and team management" },
+            { label: "Designer", description: "Design decisions and reviews" },
+            { label: "Engineering Manager", description: "Team management and processes" }
+        ],
+        multiSelect: false
+    }]
+})
+```
+
+```python
+config.set("user.role", user_role)
+```
+
+### 4.3 Responsibilities Context
+
+```
+AskUserQuestion({
+    questions: [{
+        question: "What are you responsible for? This helps prioritize which pings matter most.",
+        header: "Context",
+        options: [
+            { label: "Product decisions for a specific area", description: "You make product calls for your domain" },
+            { label: "Cross-functional coordination", description: "You connect multiple teams/areas" },
+            { label: "Technical architecture", description: "You guide technical direction" },
+            { label: "Team delivery", description: "You ensure your team ships successfully" }
+        ],
+        multiSelect: true
+    }]
+})
+```
+
+If the user provides custom text (via "Other"), use that as-is for the context.
+
+```python
+config.set("user.context", user_context_string)
+```
+
+---
+
+## Phase 5: Platform Configuration
+
+Configure which platforms to monitor.
+
+```
+AskUserQuestion({
+    questions: [{
+        question: "Which platforms should I monitor for mentions?",
+        header: "Platforms",
+        options: [
+            { label: "Slack (Recommended)", description: "Monitor Slack mentions and DMs" },
+            { label: "P2", description: "Monitor P2 post mentions and comments" },
+            { label: "Figma", description: "Monitor Figma comment notifications via email" }
+        ],
+        multiSelect: true
+    }]
+})
+```
+
+```python
+for platform in ["slack", "p2", "figma"]:
+    config.set(f"platforms.{platform}.enabled", platform in selected_platforms)
+```
+
+---
+
+## Phase 6: Verify MCP Connections
+
+Test that required MCPs are available:
+
+```
+mcp__context-a8c__context-a8c-load-provider(provider="slack")  # if Slack enabled
+mcp__context-a8c__context-a8c-load-provider(provider="wpcom")  # if P2 enabled
+mcp__context-a8c__context-a8c-load-provider(provider="linear") # always required
+```
+
+Report status for each:
+- Slack: (connected) or (not connected - Slack pings won't work)
+- P2: (connected) or (not connected - P2 pings won't work)
+- Linear: (connected) or (required - setup cannot complete)
+
+If Linear is not connected, stop and tell the user to configure the context-a8c MCP.
+
+---
+
+## Phase 7: Save Configuration
+
+Save the complete config:
+
+```python
+config.save()
+print(f"Configuration saved to: {config.config_file}")
+```
+
+---
+
+## Phase 8: Confirm Setup
+
+Show a summary of what was configured:
+
+```markdown
+## Setup Complete!
+
+**Linear:**
 - Team: {team_name} ({team_id})
-- Status for new issues: Triage
-- Status for completed: Done
+- New issues go to: Triage status
+- Completed issues: Done status
 
-**User Context:**
+**You:**
 - Name: {name}
-- Email: {email}
 - Role: {role}
 
-**Platforms Enabled:**
-- Slack: ✓ (24 hours lookback)
-- P2: ✓ (24 hours lookback)
-- Figma: ✓ (via Gmail)
+**Monitoring:**
+- Slack: Enabled
+- P2: Enabled
+- Figma: Disabled
 
-**Next Steps:**
-1. Run "triage my pings" to collect and analyze your mentions
-2. Your Linear triage inbox: [Link to team]
+**Next steps:**
+Run `/pings` to collect and triage your mentions!
 ```
 
-## Updating Configuration
-
-To update an existing configuration, follow the same workflow but only update the fields the user wants to change:
-
-**Common updates:**
-- Change Linear team ID
-- Update user context/role
-- Enable/disable platforms
-- Adjust lookback windows
+---
 
 ## Configuration Schema
 
-The complete configuration structure:
+The config is saved to `.pings-triage/config.json` in the current working directory:
 
 ```json
 {
+  "version": "2.0.0",
   "linear": {
-    "team_id": "ABC",
+    "team_id": "JCK",
     "status_new": "Triage",
-    "status_done": "Done",
-    "label_prefix": "ping-"
+    "status_done": "Done"
   },
   "platforms": {
-    "slack": {
-      "enabled": true,
-      "lookback_hours": 24
-    },
-    "p2": {
-      "enabled": true,
-      "lookback_hours": 24
-    },
-    "figma": {
-      "enabled": true,
-      "method": "gmail"
-    }
-  },
-  "analysis": {
-    "auto_close_responded": true,
-    "thread_detection": true,
-    "min_priority": 0
+    "slack": { "enabled": true },
+    "p2": { "enabled": true },
+    "figma": { "enabled": false }
   },
   "user": {
-    "name": "Full Name",
-    "email": "email@example.com",
-    "role": "Job Title",
-    "context": "Description of responsibilities, decision authority, and typical mentions"
+    "name": "James Kemp",
+    "email": "jamesckemp@gmail.com",
+    "role": "Core Product Manager for WooCommerce",
+    "context": "Makes product decisions for WooCommerce Core. Tagged for product direction, roadmap questions, and feature prioritization."
   }
 }
 ```
 
-## Validation
+---
 
-After configuration, validate:
+## Error Handling
 
-1. **Linear team exists**: Verify team ID is valid
-2. **User context complete**: Name, email, role all provided
-3. **At least one platform enabled**: Can't triage with no platforms
-4. **MCPs connected**: context-a8c is available
+- **Linear MCP fails**: Cannot complete setup. Tell user to check MCP configuration.
+- **User skips all questions**: Create minimal config with defaults, warn that analysis may be generic.
+- **Team list empty**: User may not have Linear access. Suggest they check their Linear account.
 
-If validation fails, prompt user to fix issues before proceeding.
+---
 
-## Security Notes
+## Re-running Setup
 
-- **NEVER create issues in public/shared Linear teams** - only use private personal teams
-- User context may contain sensitive information - stored locally only
-- State database is local to user's machine
-- No data is sent to external services except Linear for issue creation
+Setup is safe to run multiple times:
+- Shows current values as first options
+- User can skip to keep existing values
+- Only updates what user explicitly changes
