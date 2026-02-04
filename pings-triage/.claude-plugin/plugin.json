@@ -1,6 +1,6 @@
 {
   "name": "pings-triage",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Intelligent notification triage system that collects, deduplicates, and organizes pings from Slack, P2, and Figma. Analyzes urgency and suggests actions while preventing duplicate Linear issues for threaded conversations.",
   "author": {
     "name": "James Kemp"
