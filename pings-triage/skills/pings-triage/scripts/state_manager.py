@@ -24,7 +24,7 @@ class ConfigManager:
     """Manages plugin configuration and state stored in working folder."""
 
     DEFAULT_CONFIG = {
-        "version": "3.1.1",
+        "version": "3.2.1",
         "linear": {
             "team_id": "",
             "user_id": "",
@@ -48,7 +48,7 @@ class ConfigManager:
             "threads": {},
             "synced_urls": [],
             "metadata": {
-                "version": "3.1.1",
+                "version": "3.2.1",
                 "created_at": None
             }
         }

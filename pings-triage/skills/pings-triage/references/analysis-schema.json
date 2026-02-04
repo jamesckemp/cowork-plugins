@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Ping Analysis Output",
+  "description": "Schema for the structured JSON output from ping analysis. Claude must return JSON matching this schema - the Python template renderer uses these fields to generate consistent Linear issues.",
+  "type": "object",
+  "required": [
+    "author_name",
+    "action_summary_short",
+    "summary",
+    "original_quote",
+    "suggested_action",
+    "action_summary",
+    "priority"
+  ],
+  "properties": {
+    "author_name": {
+      "type": "string",
+      "description": "Full name of the person who sent the ping. Example: 'Elizabeth Bott'. Do NOT include usernames, handles, or platform prefixes.",
+      "examples": ["Elizabeth Bott", "Laura Nelson", "Cvetan Cvetanov"]
+    },
+    "action_summary_short": {
+      "type": "string",
+      "description": "5-7 word action phrase for the issue title. Describes what YOU need to do. Do NOT include the author's name (it's added separately). Do NOT include platform markers like [P2] or [Slack].",
+      "examples": [
+        "Review Customers design by Friday",
+        "Decide on offline refunds scope",
+        "Acknowledge their thanks"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "description": "1-2 sentence description of what the author wants from you and what you need to do. Use second person ('you').",
+      "examples": [
+        "Elizabeth wants you to review the new Customers page design. They need your feedback before the Friday sync.",
+        "Laura needs a decision on whether offline refunds are in scope for the MVP."
+      ]
+    },
+    "original_quote": {
+      "type": "string",
+      "description": "The exact text from the author's message. This will be displayed in a blockquote. Include the relevant portion, not the entire message if it's long.",
+      "examples": [
+        "Hey @james, can you take a look at this Customers design? Would love your feedback before our Friday sync.",
+        "Perfect, thank you!"
+      ]
+    },
+    "suggested_action": {
+      "type": "string",
+      "enum": ["Acknowledge", "Review", "Reply", "Decide", "Delegate"],
+      "description": "One-word action category. Acknowledge=react/like only. Review=designs/docs need feedback. Reply=direct question needs response. Decide=product decision needed. Delegate=better for someone else."
+    },
+    "action_summary": {
+      "type": "string",
+      "description": "Single sentence describing the specific action to take. More detailed than suggested_action.",
+      "examples": [
+        "Review the Figma design and share feedback before Friday",
+        "No action needed",
+        "Decide if offline refunds are in or out of MVP scope"
+      ]
+    },
+    "priority": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4,
+      "description": "Priority level: 0=None, 1=Urgent (blocking/ASAP), 2=High (time-sensitive this week), 3=Normal (default), 4=Low (FYI only). Only P1 and P2 are synced to Linear."
+    },
+    "specific_guidance": {
+      "type": "string",
+      "description": "Additional context or notes. For Delegate actions, specify who to delegate to. Leave empty for Acknowledge actions.",
+      "default": ""
+    },
+    "other_participants": {
+      "type": "string",
+      "description": "Other people involved in the thread/conversation. Use 'None' if nobody else is involved.",
+      "default": "None",
+      "examples": ["None", "Laura Nelson, Poli Gilad", "Design team"]
+    },
+    "source_description": {
+      "type": "string",
+      "description": "Formatted source location. Format: 'Platform: location'. For Slack: 'Slack: #channel-name'. For P2: 'P2: site-name' or 'P2: site-name / Post Title'.",
+      "examples": [
+        "Slack: #woo-design",
+        "P2: woocommerce / Feature Request",
+        "Figma: Customers Page Redesign"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

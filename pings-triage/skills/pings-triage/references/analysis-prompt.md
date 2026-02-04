@@ -98,11 +98,14 @@ Messages often come from ongoing conversations. The "Additional Context" field c
 
 ## Output Format
 
-Your analysis should produce the following fields:
+**CRITICAL: You MUST respond with ONLY valid JSON. No markdown, no explanations, no text before or after the JSON object.**
+
+Your analysis must produce a JSON object with these fields:
 
 | Field | Description | Example |
 |-------|-------------|---------|
-| **title** | `{Author}: {5-7 word action summary}` | "Elizabeth Bott: Review Customers design by Friday" |
+| **author_name** | Full name of the person who sent the ping (no usernames, no handles) | "Elizabeth Bott" |
+| **action_summary_short** | 5-7 word action phrase for the title. Do NOT include the author's name. Do NOT include platform markers like [P2] or [Slack]. | "Review Customers design by Friday" |
 | **summary** | What they want from you and what you need to do (1-2 sentences) | "Elizabeth wants you to review the new Customers page design. They need your feedback before the Friday sync." |
 | **original_quote** | The exact text from the author (for blockquote in Linear) | "Hey James, can you take a look at this design before our Friday sync?" |
 | **suggested_action** | One of: Acknowledge, Review, Reply, Decide, Delegate | "Review" |
@@ -111,6 +114,21 @@ Your analysis should produce the following fields:
 | **specific_guidance** | Additional context or notes (empty for Acknowledge) | "" |
 | **other_participants** | Other people involved in the thread | "None" or "Laura Nelson, Poli Gilad" |
 | **source_description** | Formatted source location | "Slack: #woo-design" or "P2: woocommerce / Feature Request" |
+
+### Title Composition
+
+The Linear issue title is composed by the template system as: `{author_name}: {action_summary_short}`
+
+You provide the two parts separately:
+- `author_name`: Just the name, e.g., "Elizabeth Bott"
+- `action_summary_short`: Just the action, e.g., "Review Customers design by Friday"
+
+The system combines them into: "Elizabeth Bott: Review Customers design by Friday"
+
+**Never include in action_summary_short:**
+- The author's name (it's added automatically)
+- Platform markers like [P2], [Slack], [Figma]
+- Prefixes like "re:" or "fwd:"
 
 ## Examples
 
@@ -125,7 +143,8 @@ Your analysis should produce the following fields:
 **Output:**
 ```json
 {
-  "title": "Elizabeth Bott: Review Customers design by Friday",
+  "author_name": "Elizabeth Bott",
+  "action_summary_short": "Review Customers design by Friday",
   "summary": "Elizabeth wants you to review the new Customers page design and provide feedback before the Friday sync.",
   "original_quote": "Hey @james, can you take a look at this Customers design? Would love your feedback before our Friday sync.",
   "suggested_action": "Review",
@@ -148,7 +167,8 @@ Your analysis should produce the following fields:
 **Output:**
 ```json
 {
-  "title": "Cvetan Cvetanov: Acknowledge their thanks",
+  "author_name": "Cvetan Cvetanov",
+  "action_summary_short": "Acknowledge their thanks",
   "summary": "Cvetan thanked you. No further action needed.",
   "original_quote": "Perfect, thank you!",
   "suggested_action": "Acknowledge",
@@ -172,7 +192,8 @@ Your analysis should produce the following fields:
 **Output:**
 ```json
 {
-  "title": "Laura Nelson: Decide on offline refunds in MVP",
+  "author_name": "Laura Nelson",
+  "action_summary_short": "Decide on offline refunds in MVP",
   "summary": "Laura needs a decision on whether offline refunds are in scope for the MVP. The team is blocked waiting on this.",
   "original_quote": "@james we need to decide whether to include offline refunds in the MVP. The team is blocked until we know the scope.",
   "suggested_action": "Decide",

@@ -187,11 +187,12 @@ For each ping, read the analysis prompt and substitute variables:
 - `{USER_NAME}` → config.get("user.name")
 - `{USER_CONTEXT}` → config.get_user_context()
 
-Then analyze the ping content to determine:
+**IMPORTANT**: The analysis must return pure JSON (no markdown, no explanation). The response must match the schema in `references/analysis-schema.json`.
 
 | Field | Description |
 |-------|-------------|
-| **title** | `{Author Name}: {5-7 word action description}` |
+| **author_name** | Full name of the person who sent the ping |
+| **action_summary_short** | 5-7 word action phrase (no author name, no [P2] prefix) |
 | **summary** | What they want from you and what you need to do |
 | **original_quote** | The exact text they sent (for blockquote) |
 | **suggested_action** | One of: Acknowledge, Review, Reply, Decide, Delegate |
@@ -201,18 +202,42 @@ Then analyze the ping content to determine:
 | **other_participants** | Other people involved in the thread |
 | **source_description** | Formatted source (e.g., "Slack: #woo-design") |
 
+### JSON Validation
+
+After receiving the analysis response, validate and parse it:
+
+```python
+import json
+from scripts.template_renderer import validate_analysis
+
+try:
+    analysis = json.loads(response)
+except json.JSONDecodeError as e:
+    print(f"Analysis returned invalid JSON for ping {ping_id}. Skipping.")
+    continue
+
+# Validate required fields
+is_valid, missing = validate_analysis(analysis)
+if not is_valid:
+    print(f"Analysis missing required fields for ping {ping_id}: {missing}. Skipping.")
+    continue
+```
+
 Store the analysis:
 ```python
+from datetime import datetime
+
 config.update_ping_analysis(ping_id, {
-    "title": title,
-    "summary": summary,
-    "original_quote": original_quote,
-    "suggested_action": action,
-    "action_summary": action_summary,
-    "priority": priority,
-    "specific_guidance": guidance,
-    "other_participants": other_participants,
-    "source_description": source_description,
+    "author_name": analysis["author_name"],
+    "action_summary_short": analysis["action_summary_short"],
+    "summary": analysis["summary"],
+    "original_quote": analysis["original_quote"],
+    "suggested_action": analysis["suggested_action"],
+    "action_summary": analysis["action_summary"],
+    "priority": analysis["priority"],
+    "specific_guidance": analysis.get("specific_guidance", ""),
+    "other_participants": analysis.get("other_participants", "None"),
+    "source_description": analysis.get("source_description", ""),
     "analyzed_at": datetime.now().isoformat()
 })
 ```
@@ -221,9 +246,15 @@ config.update_ping_analysis(ping_id, {
 
 ## Phase 4: Sync to Linear
 
-Sync analyzed pings to Linear using the format from `references/linear-template.md`.
+Sync analyzed pings to Linear using the template renderer for consistent formatting.
 
 **IMPORTANT**: Only sync P1 (Urgent) and P2 (High) priority pings. P3/P4 pings are analyzed but not synced to Linear.
+
+### Import template renderer
+
+```python
+from scripts.template_renderer import format_title, format_description, format_followup_comment
+```
 
 ### Filter pings for sync
 
@@ -249,13 +280,18 @@ existing_issue = config.get_thread_linear_issue(ping["thread_id"])
 
 **Step 2: If thread has existing issue** - Add a follow-up comment (don't modify the original issue):
 
+```python
+# Use template renderer for consistent comment formatting
+comment_body = format_followup_comment(ping["analysis"], ping)
+```
+
 ```
 mcp__context-a8c__context-a8c-execute-tool(
     provider="linear",
     tool="add-comment",
     params={
         "issueId": existing_issue,
-        "body": format_followup_comment(analysis, ping)
+        "body": comment_body
     }
 )
 ```
@@ -268,12 +304,19 @@ mcp__context-a8c__context-a8c-execute-tool(
     tool="update-issue",
     params={
         "id": existing_issue,
-        "priority": analysis["priority"]
+        "priority": ping["analysis"]["priority"]
     }
 )
 ```
 
 **Step 3: If no existing issue** - Create a new one with ALL required fields:
+
+```python
+# Use template renderer for consistent title and description formatting
+# Title is composed from author_name + action_summary_short
+title = format_title(ping["analysis"])
+description = format_description(ping["analysis"], ping)
+```
 
 ```
 mcp__context-a8c__context-a8c-execute-tool(
@@ -281,11 +324,11 @@ mcp__context-a8c__context-a8c-execute-tool(
     tool="create-issue",
     params={
         "teamId": config.get("linear.team_id"),
-        "title": analysis["title"],
-        "description": format_description(analysis, ping),
+        "title": title,  # Guaranteed format: "{Author}: {action}"
+        "description": description,  # Consistent markdown template
         "stateId": get_triage_state_id(),  # Always "Triage" status
         "assigneeId": config.get("linear.user_id"),  # Always assigned to user
-        "priority": analysis["priority"],  # 1 or 2
+        "priority": ping["analysis"]["priority"],  # 1 or 2
         "createdAt": ping["timestamp"]  # Match original ping date
     }
 )
@@ -351,103 +394,6 @@ If no new pings were found:
 
 ---
 
-## Helper: Format Description
-
-```python
-def format_description(analysis: dict, ping: dict) -> str:
-    """Format Linear issue description from analysis and ping data."""
-    from datetime import datetime
-
-    # Format source based on platform
-    if ping["platform"] == "slack":
-        source = f"Slack: #{ping['metadata'].get('channel_name', 'unknown')}"
-    elif ping["platform"] == "p2":
-        site = ping["metadata"].get("site_name", "unknown")
-        post = ping["metadata"].get("post_title", "")
-        source = f"P2: {site}" + (f" / {post}" if post else "")
-    else:
-        source = ping["platform"].title()
-
-    # Format relative date
-    try:
-        ping_date = datetime.fromisoformat(ping["timestamp"].replace("Z", "+00:00"))
-        now = datetime.now(ping_date.tzinfo) if ping_date.tzinfo else datetime.now()
-        days_ago = (now - ping_date).days
-        if days_ago == 0:
-            relative_date = "today"
-        elif days_ago == 1:
-            relative_date = "yesterday"
-        else:
-            relative_date = f"{days_ago} days ago"
-    except:
-        relative_date = "recently"
-
-    # Build description
-    description = f"""{analysis['summary']}
-
-> "{analysis['original_quote']}"
-
----
-
-**Action:** {analysis['suggested_action']}
-
-{analysis['action_summary']}
-
----
-
-- Author: {ping['author']}
-- Source: {source}
-- Also involved: {analysis.get('other_participants', 'None')}
-- Date: {relative_date}
-- [View in {ping['platform'].title()}]({ping['metadata'].get('permalink', '#')})"""
-
-    return description
-```
-
-## Helper: Format Follow-up Comment
-
-```python
-def format_followup_comment(analysis: dict, ping: dict, priority_changed: bool = False) -> str:
-    """Format a follow-up comment for an existing Linear issue."""
-    from datetime import datetime
-
-    # Format relative date
-    try:
-        ping_date = datetime.fromisoformat(ping["timestamp"].replace("Z", "+00:00"))
-        now = datetime.now(ping_date.tzinfo) if ping_date.tzinfo else datetime.now()
-        days_ago = (now - ping_date).days
-        if days_ago == 0:
-            relative_date = "today"
-        elif days_ago == 1:
-            relative_date = "yesterday"
-        else:
-            relative_date = f"{days_ago} days ago"
-    except:
-        relative_date = "recently"
-
-    # Build comment
-    comment = f"""**Follow-up from {ping['author']}** ({relative_date})
-
-{analysis['summary']}
-
-> "{analysis['original_quote']}"
-
-**Action:** {analysis['suggested_action']}
-
-{analysis['action_summary']}
-
-[View in {ping['platform'].title()}]({ping['metadata'].get('permalink', '#')})"""
-
-    # Add priority change note if applicable
-    if priority_changed:
-        priority_label = {1: "Urgent", 2: "High"}.get(analysis["priority"], "Updated")
-        comment += f"\n\n---\n*Priority updated to {priority_label}*"
-
-    return comment
-```
-
----
-
 ## Error Handling
 
 If something fails during execution:
@@ -464,6 +410,7 @@ Never expose technical details like stack traces or raw API errors. Translate to
 
 ## References
 
-- `references/analysis-prompt.md` - Complete analysis logic and output format
-- `references/linear-template.md` - Linear issue formatting and threading strategy
+- `references/analysis-prompt.md` - Complete analysis logic and JSON output format
+- `references/analysis-schema.json` - JSON schema for required analysis fields
 - `references/platform-guide.md` - Platform-specific MCP tool details
+- `scripts/template_renderer.py` - Deterministic formatting functions for Linear issues

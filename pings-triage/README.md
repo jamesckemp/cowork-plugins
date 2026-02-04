@@ -38,8 +38,8 @@ After installation, edit `config/user-config.json` to customize:
     "status_done": "Done"
   },
   "platforms": {
-    "slack": {"enabled": true, "lookback_hours": 24},
-    "p2": {"enabled": true, "lookback_hours": 24},
+    "slack": {"enabled": true},
+    "p2": {"enabled": true},
     "figma": {"enabled": true, "method": "gmail"}
   },
   "user": {
@@ -49,6 +49,8 @@ After installation, edit `config/user-config.json` to customize:
   }
 }
 ```
+
+**Note:** Time range is automatic - the plugin uses the last fetch time from state, or looks back 30 days maximum on first run.
 
 **CRITICAL**: Make sure `linear.team_id` points to your **private team** to avoid exposing private information to the rest of your organization.
 
