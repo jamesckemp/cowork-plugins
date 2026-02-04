@@ -18,7 +18,6 @@ Interactive wizard to configure pings triage. Uses AskUserQuestion for all user 
 > The plugin directory is read-only when installed from a marketplace.
 >
 > Config path: `{current_working_directory}/.pings-triage/config.json`
-> State path: `{current_working_directory}/.pings-triage/state.json`
 >
 > Always use `os.getcwd()` as the base path. **Never** attempt to write to the plugin/skill directory.
 
@@ -46,9 +45,9 @@ If first time:
 
 ---
 
-## Phase 2: Load Linear Teams
+## Phase 2: Load Linear Teams and User
 
-Load the Linear provider and fetch available teams:
+Load the Linear provider and fetch available teams AND the current user:
 
 ```
 mcp__context-a8c__context-a8c-load-provider(provider="linear")
@@ -58,6 +57,12 @@ mcp__context-a8c__context-a8c-execute-tool(
     tool="list-teams",
     params={}
 )
+
+mcp__context-a8c__context-a8c-execute-tool(
+    provider="linear",
+    tool="me",
+    params={}
+)
 ```
 
 If Linear provider fails:
@@ -65,6 +70,11 @@ If Linear provider fails:
 > I couldn't connect to Linear. Make sure the context-a8c MCP is configured and try again.
 
 Stop execution.
+
+**Store the user ID immediately:**
+```python
+config.set("linear.user_id", me_response["id"])
+```
 
 ---
 
@@ -236,6 +246,7 @@ Show a summary of what was configured:
 
 **Linear:**
 - Team: {team_name} ({team_id})
+- User ID: {user_id} (for issue assignment)
 - New issues go to: Triage status
 - Completed issues: Done status
 
@@ -260,9 +271,10 @@ The config is saved to `.pings-triage/config.json` in the current working direct
 
 ```json
 {
-  "version": "2.0.0",
+  "version": "3.1.0",
   "linear": {
     "team_id": "JCK",
+    "user_id": "abc123-def456",
     "status_new": "Triage",
     "status_done": "Done"
   },
@@ -276,6 +288,16 @@ The config is saved to `.pings-triage/config.json` in the current working direct
     "email": "jamesckemp@gmail.com",
     "role": "Core Product Manager for WooCommerce",
     "context": "Makes product decisions for WooCommerce Core. Tagged for product direction, roadmap questions, and feature prioritization."
+  },
+  "state": {
+    "last_fetch": {},
+    "pings": {},
+    "threads": {},
+    "synced_urls": [],
+    "metadata": {
+      "version": "3.1.0",
+      "created_at": "2024-01-15T10:00:00Z"
+    }
   }
 }
 ```
@@ -287,6 +309,7 @@ The config is saved to `.pings-triage/config.json` in the current working direct
 - **Linear MCP fails**: Cannot complete setup. Tell user to check MCP configuration.
 - **User skips all questions**: Create minimal config with defaults, warn that analysis may be generic.
 - **Team list empty**: User may not have Linear access. Suggest they check their Linear account.
+- **Write permission error**: Warn user that config may not persist, suggest checking folder permissions.
 
 ---
 
@@ -296,3 +319,4 @@ Setup is safe to run multiple times:
 - Shows current values as first options
 - User can skip to keep existing values
 - Only updates what user explicitly changes
+- Preserves existing state data (pings, threads, synced_urls)
