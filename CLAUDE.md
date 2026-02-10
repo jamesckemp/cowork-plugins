@@ -16,9 +16,7 @@ This repo contains personal/custom plugins that aren't published to the official
 
 ### Current Plugins
 
-| Plugin | Description |
-|--------|-------------|
-| `pings-triage` | Smart notification triage - collects mentions from Slack, P2, Figma, analyzes what's needed, and syncs to Linear |
+No plugins currently installed. Plugins will be listed here as they're added.
 
 ## Plugin Structure
 
@@ -41,15 +39,15 @@ Each plugin follows this structure:
 
 ### Commands vs Skills
 
-- **Commands** (`/setup`, `/pings`) - User-facing entry points, defined in `commands/*.md`
+- **Commands** - User-facing entry points, defined in `commands/*.md`
 - **Skills** - The actual logic that commands invoke, defined in `skills/*/SKILL.md`
 
 A command file just points to a skill:
 ```yaml
 ---
-name: pings
-description: Smart triage - collects, analyzes, and syncs your pings
-skill: pings-triage
+name: my-command
+description: What the command does
+skill: my-skill
 ---
 ```
 
@@ -94,7 +92,7 @@ Before committing plugin changes:
 Plugins should store user configuration in the **working folder**, not the plugin folder:
 - Plugin folder is read-only when installed
 - Use `.{plugin-name}/config.json` in the working directory
-- Example: `.pings-triage/config.json`
+- Example: `.my-plugin/config.json`
 
 ### Writing Skills
 

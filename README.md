@@ -4,15 +4,7 @@ Custom plugins for [Claude Cowork](https://claude.ai/cowork) - Anthropic's deskt
 
 ## Plugins
 
-### pings-triage
-
-Smart notification triage that collects mentions from Slack, P2, and Figma, analyzes what's needed, and syncs to Linear.
-
-**Commands:**
-- `/setup` - Configure your Linear team, user context, and platform preferences
-- `/pings` - Collect, analyze, and sync your mentions in one command
-
-**Requires:** `context-a8c` MCP (for Slack, P2, Linear access)
+Plugins will be listed here as they're added.
 
 ## Installation
 
