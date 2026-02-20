@@ -9,10 +9,10 @@ Extract issues from any document and import them into Linear.
 
 ## Invocation
 
-- `/import-issues <path/to/file>` — full workflow: extract, configure, create in Linear
-- `/preview-issues <path/to/file>` — dry run: extract and configure only, nothing created in Linear
+- `/import-issues <path/to/file>` — full workflow: extract, deduplicate, configure, create in Linear
+- `/preview-issues <path/to/file>` — dry run: extract, deduplicate, configure only, nothing created in Linear
 
-For `/preview-issues`, run Steps 1–4 only, then stop. Do not create any issues.
+For `/preview-issues`, run Steps 1–6 only, then stop. Do not create any issues.
 
 ## Required References
 
@@ -44,7 +44,31 @@ These files are NOT auto-loaded. You must read them explicitly. Issue descriptio
    - **Category** — functional grouping (e.g., "Onboarding", "Payments", "Design")
    - **Type** — bug, task, or feature request (determines which description template to use — see `references/issue-template.md`)
 
-### Step 2: Build Working Document
+### Step 2: Internal Dedup
+
+Before building the working document, compare extracted issues against each other. Look for:
+- Issues with overlapping titles (similar noun phrases, same subject)
+- Issues where one is a subset of another (e.g., "Fix checkout timeout" vs. "Fix checkout timeout for large carts")
+- Issues that describe the same problem from different angles
+
+If overlapping pairs are found, present them to the user:
+```
+These extracted issues may overlap:
+
+  A) "Fix checkout timeout on large carts"
+  B) "Checkout fails when cart has 50+ items"
+
+  These appear to describe the same underlying issue.
+
+  Options:
+  - Merge into one issue (pick which title to keep)
+  - Keep both as separate issues
+  - Remove one (pick which to remove)
+```
+
+Resolve all internal overlaps before proceeding.
+
+### Step 3: Build Working Document
 
 1. Present extracted issues as a numbered list:
    ```
@@ -68,7 +92,7 @@ These files are NOT auto-loaded. You must read them explicitly. Issue descriptio
 
    Omit template sections that have no meaningful content. Never use freeform descriptions.
 
-### Step 3: Gather Linear Configuration
+### Step 4: Gather Linear Configuration
 
 Use `AskUserQuestion` to collect Linear settings. Fetch real data from Linear MCP to populate choices.
 
@@ -81,61 +105,11 @@ Use `AskUserQuestion` to collect Linear settings. Fetch real data from Linear MC
 
 Present defaults clearly. Allow the user to set per-issue overrides (e.g., different labels or parent for specific issues).
 
-### Step 4: User Confirms Issues
-
-Present the final list with all Linear configuration applied:
-
-```
-## Ready to Import (N issues)
-
-### 1. [Title]
-- Team: [team name]
-- Labels: [label1, label2, ...]
-- Parent: [parent identifier] (if set)
-- Assignee: [name] (if set)
-- Description preview: [first 2 lines]
-
-### 2. [Title]
-...
-```
-
-Ask user to confirm. They can:
-- **Approve all** — proceed to import
-- **Remove specific issues** — by number
-- **Edit titles or descriptions** — for specific issues
-- **Change per-issue settings** — different labels, parent, etc.
-
-**Do not proceed until the user explicitly confirms.**
-
-### Step 5: Duplicate Check & Import
+### Step 5: Linear Duplicate Search & Resolution
 
 **Important — UUID tracking:** Linear's triage automation can move issues between teams after creation, which changes the human-readable identifier (e.g., WOOPRD-1234 becomes WOOPLUG-567). The UUID never changes. Always track created issues by their UUID, not their identifier.
 
-#### Step 5a: Internal Dedup
-
-Before searching Linear, compare extracted issues against each other. Look for:
-- Issues with overlapping titles (similar noun phrases, same subject)
-- Issues where one is a subset of another (e.g., "Fix checkout timeout" vs. "Fix checkout timeout for large carts")
-- Issues that describe the same problem from different angles
-
-If overlapping pairs are found, present them to the user:
-```
-These extracted issues may overlap:
-
-  A) "Fix checkout timeout on large carts"
-  B) "Checkout fails when cart has 50+ items"
-
-  These appear to describe the same underlying issue.
-
-  Options:
-  - Merge into one issue (pick which title to keep)
-  - Keep both as separate issues
-  - Remove one (pick which to remove)
-```
-
-Resolve all internal overlaps before proceeding to Linear search.
-
-#### Step 5b: Multi-Strategy Linear Search
+#### Step 5a: Multi-Strategy Linear Search
 
 For each confirmed issue, search for duplicates using multiple strategies. Run them in order and stop when plausible matches are found:
 
@@ -164,7 +138,7 @@ list_issues({ query: "<key noun phrases>", limit: 10 })
 ```
 Omit the `team` parameter to search across all teams. This catches issues that were filed under a different team or moved by triage automation.
 
-#### Step 5c: Duplicate Presentation & Resolution
+#### Step 5b: Duplicate Presentation & Resolution
 
 When potential duplicates are found, present them with full context:
 
@@ -190,16 +164,45 @@ Options:
 
 For option (b), use the `relatedTo` parameter in `create_issue` to link the new issue to the existing one in a single call.
 
-#### Step 5d: Batch Awareness
+### Step 6: User Confirms Issues
+
+Present the final list with all Linear configuration and duplicate resolution status applied:
+
+```
+## Ready to Import (N issues)
+
+### 1. [Title]
+- Team: [team name]
+- Labels: [label1, label2, ...]
+- Parent: [parent identifier] (if set)
+- Assignee: [name] (if set)
+- Duplicate status: No matches found / Linked to TEAM-XXXX / Create anyway
+- Description preview: [first 2 lines]
+
+### 2. [Title]
+...
+```
+
+Ask user to confirm. They can:
+- **Approve all** — proceed to import
+- **Remove specific issues** — by number
+- **Edit titles or descriptions** — for specific issues
+- **Change per-issue settings** — different labels, parent, etc.
+
+**Do not proceed until the user explicitly confirms.**
+
+### Step 7: Import Issues
+
+#### Step 7a: Batch Awareness
 
 **For 10+ issues**, suggest using parallel agents grouped by category to speed up creation. When parallelizing:
 - Group by category to minimize cross-agent overlap
 - 2-3 agents per batch
 - **Share the full list of all issue titles with each agent** so they can avoid creating issues that another agent in the batch is also creating. Each agent should check its assigned issues against the full title list and flag any cross-category overlaps before creating.
-- Each agent runs the full multi-strategy search (5b) before creating
+- Each agent runs the full multi-strategy search (5a) before creating
 - Wait for each batch to complete before starting the next
 
-#### Step 5e: Issue Creation
+#### Step 7b: Issue Creation
 
 For issues that pass duplicate checking:
 
@@ -207,7 +210,7 @@ For issues that pass duplicate checking:
 2. **After each `create_issue` call, store the UUID** (`id` field) from the response — not just the `identifier`. The UUID is the only stable reference once triage automation runs.
 3. **Never re-search by identifier to verify creation.** If `create_issue` returned a UUID, the issue exists. Searching by the old identifier after triage routing has moved it will return nothing, which is not a failure — do not re-create the issue.
 
-### Step 6: Generate Summary
+### Step 8: Generate Summary
 
 **Before generating the summary**, re-fetch every created issue by UUID using `mcp__claude_ai_Linear__get_issue({ id: "<uuid>" })`. This is critical because triage automation may have:
 - Moved the issue to a different team (changing its identifier)

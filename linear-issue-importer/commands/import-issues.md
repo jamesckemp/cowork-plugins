@@ -12,4 +12,4 @@ The user wants to extract issues from the following file and import them into Li
 
 **File:** `$ARGUMENTS`
 
-Follow the full 6-step workflow defined in the skill. Start by reading the file.
+Follow the full 8-step workflow defined in the skill. Start by reading the file.

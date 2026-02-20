@@ -12,7 +12,7 @@ The user wants to **preview only** — do NOT create any Linear issues.
 
 **File:** `$ARGUMENTS`
 
-Follow Steps 1–4 of the workflow (Read & Extract, Build Working Document, Gather Linear Configuration, User Confirms Issues). Stop after Step 4. Do NOT proceed to Step 5 (duplicate check & import) or Step 6 (summary).
+Follow Steps 1–6 of the workflow (Read & Extract, Internal Dedup, Build Working Document, Gather Linear Configuration, Linear Duplicate Search & Resolution, User Confirms Issues). Stop after Step 6. Do NOT proceed to Step 7 (import) or Step 8 (summary).
 
 After presenting the confirmed list, tell the user:
 
