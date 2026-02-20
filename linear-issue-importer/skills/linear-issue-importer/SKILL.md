@@ -1,3 +1,8 @@
+---
+description: Extract issues from documents and import them into Linear
+user-invocable: false
+---
+
 # Linear Issue Importer
 
 Extract issues from any document and import them into Linear.
@@ -8,6 +13,15 @@ Extract issues from any document and import them into Linear.
 - `/preview-issues <path/to/file>` — dry run: extract and configure only, nothing created in Linear
 
 For `/preview-issues`, run Steps 1–4 only, then stop. Do not create any issues.
+
+## Required References
+
+**Read these files before starting the workflow:**
+
+1. `references/extraction-patterns.md` — document type detection and issue extraction rules
+2. `references/issue-template.md` — **required** description templates (Bug Report, Action Item, Feature Request)
+
+These files are NOT auto-loaded. You must read them explicitly. Issue descriptions that don't follow the templates will be rejected by the user.
 
 ## Workflow
 
@@ -28,7 +42,7 @@ For `/preview-issues`, run Steps 1–4 only, then stop. Do not create any issues
    - **Timestamp** — if available (transcript time offset or document date)
    - **Suggested priority** — based on signal words (see extraction-patterns.md)
    - **Category** — functional grouping (e.g., "Onboarding", "Payments", "Design")
-   - **Type** — bug, task, or feature request
+   - **Type** — bug, task, or feature request (determines which description template to use — see `references/issue-template.md`)
 
 ### Step 2: Build Working Document
 
@@ -47,6 +61,12 @@ For `/preview-issues`, run Steps 1–4 only, then stop. Do not create any issues
    - Action items and tasks
    - Feature requests
    - All of the above
+3. **REQUIRED:** Format each issue's description using the matching template from `references/issue-template.md`:
+   - Bug → Bug Report template
+   - Task → Action Item / Task template
+   - Feature Request → Feature Request template
+
+   Omit template sections that have no meaningful content. Never use freeform descriptions.
 
 ### Step 3: Gather Linear Configuration
 
@@ -105,7 +125,7 @@ For each confirmed issue:
 
    Options: Create anyway / Skip / Link as related
    ```
-3. **Create confirmed issues** using `mcp__claude_ai_Linear__create_issue` with the description template from `references/issue-template.md`
+3. **Create confirmed issues** using `mcp__claude_ai_Linear__create_issue`. **REQUIRED:** Each issue description MUST use the template from `references/issue-template.md` matching its Type (Bug Report, Action Item, or Feature Request). Include the source attribution line. Do not use freeform descriptions.
 4. **After each `create_issue` call, store the UUID** (`id` field) from the response — not just the `identifier`. The UUID is the only stable reference once triage automation runs.
 5. **Never re-search by identifier to verify creation.** If `create_issue` returned a UUID, the issue exists. Searching by the old identifier after triage routing has moved it will return nothing, which is not a failure — do not re-create the issue.
 6. **For 10+ issues**, suggest using parallel agents grouped by category to speed up creation. Use the same pattern as the CIAB batch workflow:
@@ -152,7 +172,7 @@ Create a markdown summary with:
 - Title of removed issue 2
 ```
 
-Present this summary to the user. Offer to save it as `linear-import-YYYY-MM-DD.md` in the current directory.
+Present this summary to the user. Offer to save it as `linear-import-YYYY-MM-DD-{topic}.md` in the current directory, where `{topic}` is 2-3 lowercase hyphenated words summarising the import (e.g., `linear-import-2026-02-20-checkout-bugs.md`, `linear-import-2026-02-20-onboarding-tasks.md`).
 
 ## Reference Files
 
