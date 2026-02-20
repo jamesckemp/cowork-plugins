@@ -8,7 +8,7 @@ Point this plugin at any document — meeting transcript, bug list, Granola note
 
 1. **Extract** actionable issues (bugs, tasks, feature requests) from the content
 2. **Let you configure** the Linear team, labels, assignee, project, and parent issue
-3. **Check for duplicates** before creating anything
+3. **Check for duplicates** with multi-layer search (parent sub-issues, team search, cross-team fallback, internal dedup)
 4. **Create issues** in Linear with properly formatted descriptions
 5. **Generate a summary** of everything that was created, skipped, or removed
 

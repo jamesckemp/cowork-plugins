@@ -111,28 +111,101 @@ Ask user to confirm. They can:
 
 **Important — UUID tracking:** Linear's triage automation can move issues between teams after creation, which changes the human-readable identifier (e.g., WOOPRD-1234 becomes WOOPLUG-567). The UUID never changes. Always track created issues by their UUID, not their identifier.
 
-For each confirmed issue:
+#### Step 5a: Internal Dedup
 
-1. **Search for duplicates** using `mcp__claude_ai_Linear__list_issues`:
-   ```
-   list_issues({ team: "<team>", query: "<2-3 key terms from title>", limit: 5 })
-   ```
-2. **If potential duplicates found**, present them to the user:
-   ```
-   Issue "Fix checkout timeout" may duplicate:
-   - TEAM-1234: "Checkout times out on large carts" (Open)
-   - TEAM-1189: "Payment timeout handling" (Done)
+Before searching Linear, compare extracted issues against each other. Look for:
+- Issues with overlapping titles (similar noun phrases, same subject)
+- Issues where one is a subset of another (e.g., "Fix checkout timeout" vs. "Fix checkout timeout for large carts")
+- Issues that describe the same problem from different angles
 
-   Options: Create anyway / Skip / Link as related
-   ```
-3. **Create confirmed issues** using `mcp__claude_ai_Linear__create_issue`. **REQUIRED:** Each issue description MUST use the template from `references/issue-template.md` matching its Type (Bug Report, Action Item, or Feature Request). Include the source attribution line. Do not use freeform descriptions.
-4. **After each `create_issue` call, store the UUID** (`id` field) from the response — not just the `identifier`. The UUID is the only stable reference once triage automation runs.
-5. **Never re-search by identifier to verify creation.** If `create_issue` returned a UUID, the issue exists. Searching by the old identifier after triage routing has moved it will return nothing, which is not a failure — do not re-create the issue.
-6. **For 10+ issues**, suggest using parallel agents grouped by category to speed up creation. Use the same pattern as the CIAB batch workflow:
-   - Group by category to minimize cross-agent duplicate risk
-   - 2-3 agents per batch
-   - Each agent searches for duplicates before creating
-   - Wait for each batch to complete before starting the next
+If overlapping pairs are found, present them to the user:
+```
+These extracted issues may overlap:
+
+  A) "Fix checkout timeout on large carts"
+  B) "Checkout fails when cart has 50+ items"
+
+  These appear to describe the same underlying issue.
+
+  Options:
+  - Merge into one issue (pick which title to keep)
+  - Keep both as separate issues
+  - Remove one (pick which to remove)
+```
+
+Resolve all internal overlaps before proceeding to Linear search.
+
+#### Step 5b: Multi-Strategy Linear Search
+
+For each confirmed issue, search for duplicates using multiple strategies. Run them in order and stop when plausible matches are found:
+
+**Strategy 1 — Parent sub-issue check** (only when `parentId` is set):
+```
+list_issues({ parentId: "<parent-uuid>", limit: 50 })
+```
+Compare all existing sub-issues of the parent against the new issue title and description. This is the highest-confidence signal — if the parent already has a sub-issue covering the same topic, it's almost certainly a duplicate.
+
+**Strategy 2 — Team + query search** (always runs if Strategy 1 found nothing):
+```
+list_issues({ team: "<team-key>", query: "<key noun phrases from title>", limit: 20 })
+```
+Extract meaningful noun phrases from the title — not just 2-3 random words. For example, for "Fix checkout timeout when processing large carts", search "checkout timeout large carts".
+
+Then run a **second query variant** using synonyms or related terms from the description. For example, if the description mentions "payment processing hangs", also search:
+```
+list_issues({ team: "<team-key>", query: "payment processing hang", limit: 20 })
+```
+
+Deduplicate results across both queries before presenting.
+
+**Strategy 3 — Cross-team search** (only if Strategies 1-2 found nothing):
+```
+list_issues({ query: "<key noun phrases>", limit: 10 })
+```
+Omit the `team` parameter to search across all teams. This catches issues that were filed under a different team or moved by triage automation.
+
+#### Step 5c: Duplicate Presentation & Resolution
+
+When potential duplicates are found, present them with full context:
+
+```
+Issue "Fix checkout timeout" may already exist:
+
+  1. WOOPRD-1234: "Checkout times out on large carts"
+     Team: WooProduct | Status: In Progress | Priority: High
+     Assignee: Jane Smith | Updated: 3 days ago
+     Match reason: Title overlap — "checkout timeout"
+
+  2. WOOPLUG-567: "Payment timeout handling"
+     Team: WooPlugins | Status: Done | Priority: Medium
+     Assignee: — | Updated: 2 weeks ago
+     Match reason: Related terms in description
+
+Options:
+  a) Create anyway (no relation)
+  b) Create and link as related to [pick which existing issue]
+  c) Mark as duplicate — skip creation
+  d) Skip entirely
+```
+
+For option (b), use the `relatedTo` parameter in `create_issue` to link the new issue to the existing one in a single call.
+
+#### Step 5d: Batch Awareness
+
+**For 10+ issues**, suggest using parallel agents grouped by category to speed up creation. When parallelizing:
+- Group by category to minimize cross-agent overlap
+- 2-3 agents per batch
+- **Share the full list of all issue titles with each agent** so they can avoid creating issues that another agent in the batch is also creating. Each agent should check its assigned issues against the full title list and flag any cross-category overlaps before creating.
+- Each agent runs the full multi-strategy search (5b) before creating
+- Wait for each batch to complete before starting the next
+
+#### Step 5e: Issue Creation
+
+For issues that pass duplicate checking:
+
+1. **Create the issue** using `mcp__claude_ai_Linear__create_issue`. **REQUIRED:** Each issue description MUST use the template from `references/issue-template.md` matching its Type (Bug Report, Action Item, or Feature Request). Include the source attribution line. Do not use freeform descriptions.
+2. **After each `create_issue` call, store the UUID** (`id` field) from the response — not just the `identifier`. The UUID is the only stable reference once triage automation runs.
+3. **Never re-search by identifier to verify creation.** If `create_issue` returned a UUID, the issue exists. Searching by the old identifier after triage routing has moved it will return nothing, which is not a failure — do not re-create the issue.
 
 ### Step 6: Generate Summary
 
