@@ -1,11 +1,10 @@
 ---
-name: voiceprint
 description: >
   Extract a comprehensive linguistic fingerprint through interactive sampling and analysis,
   then generate a personalized writer skill that any AI tool can use to write in the user's
   authentic voice. Takes ~12 minutes through a guided questionnaire of writing samples,
   style preferences, and pattern rejection.
-compatibility: Works in any Claude Code environment. No MCP dependencies required.
+user-invocable: false
 ---
 
 # Voiceprint - Voice Profiling Skill
