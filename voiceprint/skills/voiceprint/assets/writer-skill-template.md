@@ -52,6 +52,9 @@ When asked to write content, follow this workflow:
 ### Rejected Phrases
 {{REJECTED_PHRASES}}
 
+### Setup Labels
+{{SETUP_LABELS}}
+
 ### Rejected Structures
 {{REJECTED_STRUCTURES}}
 
@@ -117,6 +120,7 @@ Scan the output for any phrase on the Forbidden Patterns list. Common offenders:
 - [ ] Generic openers ("In today's...", "In an era of...")
 - [ ] Overblown attribution ("serves as a testament to", "speaks volumes")
 - [ ] Forced engagement ("Let's dive in", "Let's unpack")
+- [ ] Setup labels ("The key insight:", "The important thing:", "The reality is:")
 - [ ] Empty emphasis ("truly", "remarkably", "groundbreaking")
 
 ### Structure Check

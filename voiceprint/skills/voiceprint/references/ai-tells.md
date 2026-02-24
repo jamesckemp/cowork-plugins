@@ -52,6 +52,27 @@ Artificial intimacy with the reader:
 - "Here's the thing..."
 - "Here's the kicker..."
 
+### Setup Labels
+
+Declarative topic labels that announce what's coming instead of just stating it. These differ from forced engagement (which are collaborative invitations like "Let's dive in") because setup labels are mid-text announcements that telegraph the point before making it:
+
+- "The key insight:"
+- "The key takeaway:"
+- "The important thing:"
+- "Here's what matters:"
+- "What you need to know:"
+- "The reality is:"
+- "The truth is:"
+- "The real issue:"
+- "The core problem:"
+- "The critical point:"
+- "One key thing:"
+- "One thing to note:"
+- "Simply put:"
+- "In short:"
+
+**Why it's a tell**: Human writers make the point directly. AI labels the point before making it, creating a redundant announcement layer. "The key insight is that teams ship faster with fewer meetings" vs "Teams ship faster with fewer meetings."
+
 ### Empty Emphasis
 
 Words that sound strong but add nothing:
