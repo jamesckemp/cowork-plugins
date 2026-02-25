@@ -84,6 +84,16 @@ Use `AskUserQuestion`:
 
 Store the response as `USE_CASES` to weight the analysis appropriately.
 
+Finally, ask where to save the output:
+
+Use `AskUserQuestion`:
+- **Question**: "Where should I save your voice profile and writer skill?"
+- **Options**:
+  - "Current directory" (description: show the resolved absolute path of the current working directory, e.g. "/Users/jane/projects")
+  - "Let me specify" (description: "I'll provide a custom path")
+
+Store as `OUTPUT_DIR`. If the user chose "Current directory", resolve the working directory to its absolute path. If the user chose "Let me specify", ask them for the path as free text, then expand `~` and resolve to an absolute path. Verify the directory exists before proceeding.
+
 ---
 
 ## Phase 2: Writing Samples
@@ -268,7 +278,7 @@ Create a structured summary by extracting from the conversation. Do NOT pass the
 - Profile name: {PROFILE_NAME}
 - Use cases: {USE_CASES}
 - Date: {DATE}
-- Working directory: {CWD}
+- Output directory: {OUTPUT_DIR}
 
 ## Writing Samples
 
@@ -408,13 +418,13 @@ These synthesized exemplars go in the Platform Formats section of the writer ski
 
 **Step 4: Generate Voice Profile**
 
-Use the template at `assets/voice-profile-template.md` as a structural guide. Replace all `{{PLACEHOLDER}}` values with analyzed data. Write the completed profile to: `{CWD}/{PROFILE_NAME}-voiceprint.md`
+Use the template at `assets/voice-profile-template.md` as a structural guide. Replace all `{{PLACEHOLDER}}` values with analyzed data. Write the completed profile to: `{OUTPUT_DIR}/{PROFILE_NAME}-voiceprint.md`
 
 Include: quantitative metrics from Step 1, cross-reference notes from Step 2, full rejection list from Step 3, the selected exemplars from Step 3.5, the quick reference card summary table, and 3 sample transformations showing generic AI writing vs this user's voice (cover different content types: a generic opener, a formal explanation, and a social/short-form post).
 
 **Step 5: Generate Writer Skill**
 
-Use the template at `assets/writer-skill-template.md` as a structural guide. Create the directory `{CWD}/{PROFILE_NAME}-writer/` containing:
+Use the template at `assets/writer-skill-template.md` as a structural guide. Create the directory `{OUTPUT_DIR}/{PROFILE_NAME}-writer/` containing:
 - `SKILL.md` - The complete writer skill with all `{{PLACEHOLDER}}` values filled in
 - `voice-profile.md` - A copy of the voice profile
 
@@ -434,9 +444,9 @@ The writer skill must:
 ### After the Sub-Agent Completes
 
 The sub-agent will write the output files directly. Verify they were created:
-- `{PROFILE_NAME}-voiceprint.md` should exist in the working directory
-- `{PROFILE_NAME}-writer/SKILL.md` should exist in the working directory
-- `{PROFILE_NAME}-writer/voice-profile.md` should exist in the working directory
+- `{OUTPUT_DIR}/{PROFILE_NAME}-voiceprint.md` should exist
+- `{OUTPUT_DIR}/{PROFILE_NAME}-writer/SKILL.md` should exist
+- `{OUTPUT_DIR}/{PROFILE_NAME}-writer/voice-profile.md` should exist
 
 If any files are missing, report the issue to the user rather than attempting to regenerate in the main context.
 
@@ -495,14 +505,14 @@ Once the user confirms satisfaction with all test pieces (or says they're good e
 
 > Your voice profile is ready. Here's what was created:
 >
-> 1. **`{PROFILE_NAME}-voiceprint.md`** - Your complete voice analysis with writing exemplars
-> 2. **`{PROFILE_NAME}-writer/SKILL.md`** - A writer skill you can use in any Claude session
-> 3. **`{PROFILE_NAME}-writer/voice-profile.md`** - Voice profile bundled with the skill
+> 1. **`{OUTPUT_DIR}/{PROFILE_NAME}-voiceprint.md`** - Your complete voice analysis with writing exemplars
+> 2. **`{OUTPUT_DIR}/{PROFILE_NAME}-writer/SKILL.md`** - A writer skill you can use in any Claude session
+> 3. **`{OUTPUT_DIR}/{PROFILE_NAME}-writer/voice-profile.md`** - Voice profile bundled with the skill
 >
-> To use the writer skill, reference it when asking Claude to write something, or install it as a skill in your Claude Code setup.
+> To use the writer skill, add `{OUTPUT_DIR}/{PROFILE_NAME}-writer/` as a skill directory in your Claude Code project, or reference the SKILL.md directly when asking Claude to write something.
 >
-> To refine later: `/voiceprint refine {path-to-writer-dir}`
-> To update with latest features: `/voiceprint update {path-to-writer-dir}`
+> To refine later: `/voiceprint refine {OUTPUT_DIR}/{PROFILE_NAME}-writer`
+> To update with latest features: `/voiceprint update {OUTPUT_DIR}/{PROFILE_NAME}-writer`
 
 ---
 
