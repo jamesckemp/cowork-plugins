@@ -12,7 +12,7 @@ Custom plugins for [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
 ### With Claude Code CLI
 
 ```bash
-claude plugin add --marketplace github:jamesckemp/claude-plugins
+claude plugin marketplace add jamesckemp/claude-plugins
 ```
 
 Then install individual plugins:
