@@ -1,6 +1,6 @@
-# Cowork Plugins
+# Claude Plugins
 
-Custom plugins for [Claude Cowork](https://claude.ai/cowork) - Anthropic's desktop application for agentic coding.
+Custom plugins for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) - Anthropic's agentic coding tool.
 
 ## Plugins
 
@@ -12,7 +12,7 @@ Custom plugins for [Claude Cowork](https://claude.ai/cowork) - Anthropic's deskt
 ### With Claude Code CLI
 
 ```bash
-claude plugin add --marketplace github:jamesckemp/cowork-plugins
+claude plugin add --marketplace github:jamesckemp/claude-plugins
 ```
 
 Then install individual plugins:
@@ -22,12 +22,12 @@ claude plugin install linear-issue-importer
 claude plugin install voiceprint
 ```
 
-### With Claude Cowork (Desktop App)
+### With Claude Code (Desktop App)
 
-1. In Claude Cowork, click the **+** button in the Plugins panel
+1. In Claude Code, click the **+** button in the Plugins panel
 2. Select **Browse plugins**
 3. Click the marketplace dropdown and select **Add marketplace from GitHub**
-4. Enter `jamesckemp/cowork-plugins`
+4. Enter `jamesckemp/claude-plugins`
 5. Click **Sync**
 
 The plugins will appear in your marketplace and can be installed from there.
