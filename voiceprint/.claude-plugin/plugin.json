@@ -1,6 +1,6 @@
 {
   "name": "voiceprint",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Extract a linguistic fingerprint through interactive sampling and analysis, then generate a personalized voice profile and writer skill",
   "author": {
     "name": "James Kemp"

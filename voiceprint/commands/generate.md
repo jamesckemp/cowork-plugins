@@ -10,6 +10,6 @@ This command requires execute mode. If plan mode is currently active, exit plan 
 
 ## Workflow
 
-Use skill: voiceprint
+Use skill: voiceprint:voiceprint
 
 Follow the full workflow defined in the skill, starting with Phase 1: Introduction & Setup.

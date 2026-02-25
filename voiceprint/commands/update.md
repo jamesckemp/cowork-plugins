@@ -7,7 +7,7 @@ argument-hint: "<path to writer skill directory>"
 
 Update an existing writer skill with the latest voiceprint features and template improvements.
 
-Use skill: voiceprint/update
+Use skill: voiceprint:voiceprint/update
 
 The user wants to update the writer skill at the following path:
 
