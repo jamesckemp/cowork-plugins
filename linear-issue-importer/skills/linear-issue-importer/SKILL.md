@@ -5,6 +5,8 @@ user-invocable: false
 
 If plan mode is active, exit it now using ExitPlanMode before starting this workflow. All import commands run in execute mode.
 
+**Important:** This skill definition is the authoritative process. Do not reference previous session outputs to learn how extraction was done before — those may reflect an older version of this skill or a different approach entirely. Always follow the steps defined here.
+
 # Linear Issue Importer
 
 Extract issues from any document and import them into Linear.
@@ -26,7 +28,28 @@ For `/preview-issues`, run Steps 0–6 only, then stop. Do not create any issues
 
 These files are NOT auto-loaded. You must read them explicitly. Issue descriptions that don't follow the templates will be rejected by the user.
 
+## Pre-Flight Check (MANDATORY)
+
+Before doing ANY work on the source file, complete these steps in order:
+
+1. **Read ALL reference files listed above.** Do not proceed until you have read extraction-patterns.md, issue-template.md, and chunk-agent-prompt.md.
+2. **Detect the document type** (Step 1a) and **determine the routing** (Step 1b).
+3. **Report the routing decision to the user** before starting extraction:
+   > Document type: [type]
+   > Utterance/line count: [N]
+   > Routing: [Chunked pipeline (Steps 1c-1e) / Single-pass transcript-first / Single-pass structured]
+   > [If chunked] Estimated chunks: ~N (5-min windows, 2-min overlap)
+
+Do NOT begin extraction until the routing decision has been reported.
+
 ## Workflow
+
+**Interactive steps that require user input — do not skip:**
+- Step 0b — Ask for supplementary links
+- Step 2 — Internal dedup resolution (if overlaps found)
+- Step 4 — Linear configuration
+- Step 5c — Duplicate resolution
+- Step 6 — Final confirmation
 
 ### Step 0: Gather Source Context
 
@@ -85,6 +108,8 @@ Raw Transcript with 300+ lines       → Chunked pipeline (Steps 1c–1e)
 Raw Transcript with <300 lines       → Single-pass transcript-first (Step 1f)
 Granola Obsidian / Markdown Bug List / General Doc → Single-pass structured (Step 1f)
 ```
+
+**Routing confirmation (required):** After determining the route, output the routing decision to the user (see Pre-Flight Check above). Do not proceed to extraction until this output has been presented.
 
 #### Step 1c: Chunk transcript into overlapping segments
 
