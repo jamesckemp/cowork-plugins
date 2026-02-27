@@ -93,18 +93,23 @@ Search for existing issues. Used in **Step 5** for multi-layer duplicate checkin
 | `team` | No | Team key (e.g., "WOOPRD"). Omit to search across all teams. |
 | `query` | No | Free-text search across title and description. Fuzzy matching — "checkout timeout" matches "Checkout times out on large carts". Searches all statuses (open and closed). |
 | `parentId` | No | UUID of a parent issue. Returns only direct sub-issues of that parent. Highest-confidence signal for duplicate checking when importing sub-issues. |
-| `limit` | No | Max results to return. Default varies by context; max is 250. Use 20 for query searches, 50 for parent sub-issue lookups. |
+| `limit` | No | Max results to return. Default varies by context; max is 250. Use 30 for team+query searches, 20 for cross-team searches, 50 for parent sub-issue lookups. |
 
 **Search strategies (used in Step 5):**
 
 1. **Parent sub-issue check** — `list_issues({ parentId: "<uuid>", limit: 50 })` — when importing as sub-issues, always check existing children first. This is the highest-confidence duplicate signal.
-2. **Team + query search** — `list_issues({ team: "<key>", query: "<noun phrases>", limit: 20 })` — primary search. Extract key noun phrases from the issue title, not just 2-3 random words.
-3. **Cross-team search** — `list_issues({ query: "<key phrases>", limit: 10 })` — fallback when team-scoped search finds nothing. Omit `team` to search the entire workspace.
+2. **Team + query search (3 variants)** — run up to 3 queries with `limit: 30` each:
+   - **Variant 1: Title noun phrases** — `list_issues({ team: "<key>", query: "checkout timeout large carts", limit: 30 })` — extract meaningful noun phrases from the issue title.
+   - **Variant 2: Description key terms** — `list_issues({ team: "<key>", query: "payment processing hang", limit: 30 })` — synonyms or related terms from the description.
+   - **Variant 3: User-visible symptom** — `list_issues({ team: "<key>", query: "spinning loader checkout", limit: 30 })` — describe the problem from the user's perspective, how they'd report it. This catches issues titled differently but describing the same observable behavior.
+   - Deduplicate results across all 3 queries before presenting.
+3. **Cross-team search** — `list_issues({ query: "<key phrases>", limit: 20 })` — fallback when team-scoped search finds nothing. Omit `team` to search the entire workspace.
 
 **Tips:**
 - Use noun phrases from the title, not filler words (e.g., "checkout timeout handling" not "fix the timeout")
-- Run a second query variant with synonyms/related terms from the description for better recall
-- A match doesn't mean it's a duplicate — always present to user for decision
+- The 3rd query variant (user-visible symptom) often catches issues that the first two miss — think about how a user or tester would describe the problem
+- **Early-stop:** If any query variant returns a HIGH confidence match (same behavior, active issue), skip remaining variants for that issue
+- A match doesn't mean it's a duplicate — always present to user for decision with confidence labels
 
 ---
 

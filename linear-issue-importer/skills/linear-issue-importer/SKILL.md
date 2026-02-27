@@ -3,6 +3,8 @@ description: Extract issues from documents and import them into Linear
 user-invocable: false
 ---
 
+If plan mode is active, exit it now using ExitPlanMode before starting this workflow. All import commands run in execute mode.
+
 # Linear Issue Importer
 
 Extract issues from any document and import them into Linear.
@@ -12,7 +14,7 @@ Extract issues from any document and import them into Linear.
 - `/import-issues <path/to/file>` — full workflow: extract, deduplicate, configure, create in Linear
 - `/preview-issues <path/to/file>` — dry run: extract, deduplicate, configure only, nothing created in Linear
 
-For `/preview-issues`, run Steps 1–6 only, then stop. Do not create any issues.
+For `/preview-issues`, run Steps 0–6 only, then stop. Do not create any issues.
 
 ## Required References
 
@@ -20,12 +22,51 @@ For `/preview-issues`, run Steps 1–6 only, then stop. Do not create any issues
 
 1. `references/extraction-patterns.md` — document type detection and issue extraction rules
 2. `references/issue-template.md` — **required** description templates (Bug Report, Action Item, Feature Request)
+3. `references/chunk-agent-prompt.md` — prompt template for chunk analysis agents (only needed for chunked pipeline)
 
 These files are NOT auto-loaded. You must read them explicitly. Issue descriptions that don't follow the templates will be rejected by the user.
 
 ## Workflow
 
+### Step 0: Gather Source Context
+
+Run this step once at the start. It produces metadata and a reusable attribution block embedded in every created issue.
+
+#### Step 0a: Identify source metadata
+
+After reading the file, extract:
+- **Source title** — meeting title (from Granola JSON `title`, Obsidian frontmatter `title`, or filename)
+- **Source date** — meeting/document date (from Granola JSON `created_at`, Obsidian frontmatter `created_at`, or file modification date)
+- **Source link** — Granola URL (`https://notes.granola.ai/d/{id}`), Obsidian frontmatter `granola_url`, or file path if no URL available
+
+#### Step 0b: Ask for supplementary links
+
+Use `AskUserQuestion` to ask:
+
+> Do you have any links to include in every issue? (e.g., summary post, video recording, related docs)
+
+Options:
+- **Yes, let me provide links** — collect one or more URLs with labels
+- **No, continue without extra links** — proceed immediately
+
+If the user provides links, store them as `supplementary_links[]` for use in issue descriptions.
+
+#### Step 0c: Compose source attribution block
+
+Build a reusable attribution block following the format in `references/issue-template.md`. This block is appended to every issue description:
+
+```markdown
+---
+Source: [Meeting Title](url) — YYYY-MM-DD
+[Summary post](url)
+[Video recording](url)
+```
+
+Supplementary link lines are only included if the user provided them in Step 0b. If no links were provided, just the Source line appears.
+
 ### Step 1: Read & Extract Issues
+
+#### Step 1a: Read file & detect document type
 
 1. Read the file from the provided path
 2. Detect the document type:
@@ -34,15 +75,73 @@ These files are NOT auto-loaded. You must read them explicitly. Issue descriptio
    - **Markdown bug list** — `##` category headings, `###` individual bugs, prefixes like "Bug:", "UX:", "Task:"
    - **Raw transcript** — speaker labels, timestamps, conversational text
    - **General document** — fallback: structured lists, action-oriented language
-3. Extract issues using patterns from `references/extraction-patterns.md`
-4. For each extracted issue, capture:
+
+#### Step 1b: Route by document type
+
+```
+Granola JSON with 200+ utterances    → Chunked pipeline (Steps 1c–1e)
+Granola JSON with <200 utterances    → Single-pass transcript-first (Step 1f)
+Raw Transcript with 300+ lines       → Chunked pipeline (Steps 1c–1e)
+Raw Transcript with <300 lines       → Single-pass transcript-first (Step 1f)
+Granola Obsidian / Markdown Bug List / General Doc → Single-pass structured (Step 1f)
+```
+
+#### Step 1c: Chunk transcript into overlapping segments
+
+**Timestamped transcripts (Granola JSON):**
+- 5-minute windows with 2-minute overlaps
+- Chunk 1: 0:00–5:00, Chunk 2: 3:00–8:00, Chunk 3: 6:00–11:00, etc.
+- Utterances in the overlap zone appear in both adjacent chunks
+
+**Non-timestamped transcripts (Raw Transcript):**
+- 80-line chunks with 20-line overlaps
+- If timestamps are parseable from text (e.g., `[00:12:34]`), prefer time-based chunking
+
+Record metadata per chunk: start time, end time, overlap boundaries, utterance count, position in sequence.
+
+#### Step 1d: Spawn chunk analysis agents
+
+Read `references/chunk-agent-prompt.md` for the prompt template. Use the `Task` tool to spawn agents in batches of 3–4. Each agent receives:
+- Its chunk of raw transcript text
+- Chunk metadata (boundaries, overlap zones, position in sequence)
+- The chunk agent prompt from the template
+- All chunk time ranges (so agents can flag cross-chunk references)
+
+Also calculate the video time offset for this batch: `video_time = utterance.start_timestamp - first_utterance.start_timestamp`, formatted as `H:MM:SS`. Pass this to agents so they can include video-referenceable timestamps.
+
+```
+Task tool config:
+  subagent_type: "general-purpose"
+  mode: "bypassPermissions"
+```
+
+#### Step 1e: Synthesis — merge chunk results
+
+After all agents complete:
+
+1. **Collect** all extracted issues from all chunks
+2. **Overlap dedup** — for issues in the overlap zone between adjacent chunks, compare by timestamp proximity and topic. Merge duplicates, keeping the richer version (more detail, better quotes, higher confidence)
+3. **Cross-chunk connections** — when agents flag references to other timeframes, search other chunks' results and link related issues (these may be a single issue with cause-effect separated across chunks)
+4. **Notes cross-reference** (Granola JSON only) — compare transcript issues against `notes_markdown`:
+   - Match found in both → enrich with notes language
+   - Found only in notes → add with "notes-only" note
+   - Found only in transcript → keep as-is (this is the key scenario that transcript-first catches)
+5. Produce final extracted issue list for Step 2
+
+#### Step 1f: Single-pass extraction
+
+- **Structured documents** (Granola Obsidian, Markdown Bug List, General Doc): Unchanged — extract from document structure directly using patterns from `references/extraction-patterns.md`
+- **Short transcripts** (Granola JSON <200 utterances, Raw Transcript <300 lines): Transcript-first ordering with the enhanced extraction approach (including Visual Gap Indicators from `references/extraction-patterns.md`), then cross-reference against notes for enrichment
+
+For each extracted issue, capture:
    - **Title** — concise, action-oriented summary
    - **Description** — full context from the source
-   - **Source quote** — exact text from the document
-   - **Timestamp** — if available (transcript time offset or document date)
+   - **Source quote** — exact text from the document, with video timestamp if available (e.g., `at 1:37:05 in recording`)
+   - **Video timestamp** — `H:MM:SS` offset from recording start (for timestamped transcripts)
    - **Suggested priority** — based on signal words (see extraction-patterns.md)
    - **Category** — functional grouping (e.g., "Onboarding", "Payments", "Design")
    - **Type** — bug, task, or feature request (determines which description template to use — see `references/issue-template.md`)
+   - **Visual flag** — `[Potential visual issue]` if identified through Visual Gap Indicators
 
 ### Step 2: Internal Dedup
 
@@ -119,28 +218,56 @@ list_issues({ parentId: "<parent-uuid>", limit: 50 })
 ```
 Compare all existing sub-issues of the parent against the new issue title and description. This is the highest-confidence signal — if the parent already has a sub-issue covering the same topic, it's almost certainly a duplicate.
 
-**Strategy 2 — Team + query search** (always runs if Strategy 1 found nothing):
+**Strategy 2 — Team + query search with 3 variants** (always runs if Strategy 1 found nothing):
+
+Run up to 3 query variants, each with `limit: 30`:
+
+**Variant 1 — Title noun phrases:**
 ```
-list_issues({ team: "<team-key>", query: "<key noun phrases from title>", limit: 20 })
+list_issues({ team: "<team-key>", query: "<key noun phrases from title>", limit: 30 })
 ```
 Extract meaningful noun phrases from the title — not just 2-3 random words. For example, for "Fix checkout timeout when processing large carts", search "checkout timeout large carts".
 
-Then run a **second query variant** using synonyms or related terms from the description. For example, if the description mentions "payment processing hangs", also search:
+**Variant 2 — Description key terms:**
 ```
-list_issues({ team: "<team-key>", query: "payment processing hang", limit: 20 })
+list_issues({ team: "<team-key>", query: "<synonyms/related terms from description>", limit: 30 })
 ```
+Use synonyms or related terms from the description. For example, if the description mentions "payment processing hangs", search "payment processing hang".
 
-Deduplicate results across both queries before presenting.
+**Variant 3 — User-visible symptom:**
+```
+list_issues({ team: "<team-key>", query: "<how a user would describe the problem>", limit: 30 })
+```
+Describe the problem from the user's perspective — how they'd report it. For example, "spinning loader checkout" or "can't complete purchase". This catches issues titled differently but describing the same observable behavior.
+
+**Early-stop:** If any variant returns a HIGH confidence match (same behavior described, active issue), skip remaining variants for that issue.
+
+Deduplicate results across all query variants before presenting.
 
 **Strategy 3 — Cross-team search** (only if Strategies 1-2 found nothing):
 ```
-list_issues({ query: "<key noun phrases>", limit: 10 })
+list_issues({ query: "<key noun phrases>", limit: 20 })
 ```
 Omit the `team` parameter to search across all teams. This catches issues that were filed under a different team or moved by triage automation.
 
-#### Step 5b: Duplicate Presentation & Resolution
+#### Step 5b: Confidence Assessment
 
-When potential duplicates are found, present them with full context:
+After collecting all candidates from the search strategies, assess each match and assign a confidence label:
+
+- **HIGH** — same behavior described, same UI elements/flows, issue is active (Open, In Progress, Backlog)
+- **MEDIUM** — related topic or overlapping description, but not clearly the same issue, or issue is in a different state
+- **LOW** — tangentially related, already resolved (Done/Cancelled), or only superficial title similarity
+
+Confidence is based on:
+- **Title similarity** — do they describe the same problem?
+- **Description overlap** — same UI elements, flows, error states?
+- **Status relevance** — active issue (higher confidence) vs. Done/Cancelled (lower confidence)
+
+Order candidates HIGH → MEDIUM → LOW when presenting.
+
+#### Step 5c: Duplicate Presentation & Resolution
+
+When potential duplicates are found, present them with full context and confidence labels:
 
 ```
 Issue "Fix checkout timeout" may already exist:
@@ -148,12 +275,12 @@ Issue "Fix checkout timeout" may already exist:
   1. WOOPRD-1234: "Checkout times out on large carts"
      Team: WooProduct | Status: In Progress | Priority: High
      Assignee: Jane Smith | Updated: 3 days ago
-     Match reason: Title overlap — "checkout timeout"
+     Match confidence: HIGH — same behavior, active issue
 
   2. WOOPLUG-567: "Payment timeout handling"
      Team: WooPlugins | Status: Done | Priority: Medium
      Assignee: — | Updated: 2 weeks ago
-     Match reason: Related terms in description
+     Match confidence: LOW — related topic, already resolved
 
 Options:
   a) Create anyway (no relation)
@@ -206,7 +333,7 @@ Ask user to confirm. They can:
 
 For issues that pass duplicate checking:
 
-1. **Create the issue** using `mcp__claude_ai_Linear__create_issue`. **REQUIRED:** Each issue description MUST use the template from `references/issue-template.md` matching its Type (Bug Report, Action Item, or Feature Request). Include the source attribution line. Do not use freeform descriptions.
+1. **Create the issue** using `mcp__claude_ai_Linear__create_issue`. **REQUIRED:** Each issue description MUST use the template from `references/issue-template.md` matching its Type (Bug Report, Action Item, or Feature Request). Include the source attribution block from Step 0c. Do not use freeform descriptions.
 2. **After each `create_issue` call, store the UUID** (`id` field) from the response — not just the `identifier`. The UUID is the only stable reference once triage automation runs.
 3. **Never re-search by identifier to verify creation.** If `create_issue` returned a UUID, the issue exists. Searching by the old identifier after triage routing has moved it will return nothing, which is not a failure — do not re-create the issue.
 
@@ -255,3 +382,4 @@ Present this summary to the user. Offer to save it as `linear-import-YYYY-MM-DD-
 - `references/extraction-patterns.md` — how to parse each document type
 - `references/issue-template.md` — description templates for bugs, tasks, and feature requests
 - `references/linear-tools.md` — Linear MCP tool quick reference
+- `references/chunk-agent-prompt.md` — prompt template for chunk analysis agents (used in Step 1d)

@@ -36,14 +36,30 @@ Each utterance in `transcript[]` has:
 - `text` — spoken words
 
 ### Extraction approach
-1. Parse `notes_markdown` first — it contains structured summaries with headings and bullets
-2. Scan `transcript[]` for additional issues not captured in notes:
+
+**Route by transcript size:**
+- **200+ utterances** → Chunked pipeline (see SKILL.md Step 1c–1e)
+- **<200 utterances** → Single-pass transcript-first (below)
+
+**Single-pass transcript-first extraction:**
+1. Extract issues from `transcript[]` first — this is the primary source:
+   - Read conversational flow deeply, not just keyword-scanning
    - Look for problem/decision/request language (see Signal Words below)
-   - Group nearby utterances into coherent statements
-3. Calculate human-readable timestamps as MM:SS offset from the first transcript entry's `start_timestamp`
+   - Connect cause and effect across speakers and time gaps
+   - Treat indirect language as potential issues ("that's weird", "something happened")
+   - Watch for Visual Gap Indicators (see section below)
+   - Group related utterances into coherent issues
+2. Cross-reference against `notes_markdown` for enrichment:
+   - Issue found in both transcript and notes → enrich with notes language
+   - Issue found only in notes → add with "notes-only" note
+   - Issue found only in transcript → keep as-is (this is the key scenario that transcript-first catches)
+3. Calculate video-referenceable timestamps as offset from the first transcript entry's `start_timestamp`:
+   - `video_time = utterance.start_timestamp - first_utterance.start_timestamp`
+   - Format as `H:MM:SS` (e.g., `1:37:05`)
+   - Bias earlier — raw calculation naturally produces timestamps a few seconds early, which is preferable (users arrive before the relevant moment, not after)
 4. For each identified issue, include:
    - The exact quote from transcript
-   - The timestamp range (e.g., "12:34–13:01")
+   - The video timestamp range (e.g., "0:12:34–0:13:01")
    - Who raised it (from speaker identification or `source` field)
 
 ### Source link
@@ -129,10 +145,16 @@ Speaker 1: Has anyone looked at the payment timeout?
 ```
 
 ### Extraction approach
+
+**Route by transcript length:**
+- **300+ lines** → Chunked pipeline (see SKILL.md Step 1c–1e). If timestamps are parseable from text (e.g., `[00:12:34]`), prefer time-based chunking.
+- **<300 lines** → Single-pass extraction (below)
+
+**Single-pass extraction:**
 1. Identify speaker labels (Name:, Speaker N:, or bracketed names)
-2. Group consecutive statements by the same speaker or on the same topic
-3. Look for Signal Words (below) to identify issues
-4. Extract timestamp if present — normalize to MM:SS format
+2. Read conversational flow deeply — connect cause and effect across speakers and time gaps
+3. Look for Signal Words (below) and Visual Gap Indicators (below) to identify issues
+4. Extract timestamp if present — normalize to H:MM:SS format as video-referenceable offset
 5. Capture the full statement as the source quote
 
 ---
@@ -175,6 +197,40 @@ Use these to identify issues and suggest priority:
 ### Decision indicators
 - "decided", "agreed", "will do", "going with", "approved"
 - "rejected", "won't do", "deferred", "postponed", "revisit"
+
+## Visual Gap Indicators
+
+These patterns suggest the speaker is reacting to something they can see on screen but not describing verbally. Issues identified this way may need screenshot or video recording verification.
+
+### Reactions without descriptions
+- "That's not good", "Oh no", "Hmm", "What is that?"
+- "Wait, what?", "That shouldn't be there", "Where did it go?"
+- Exclamations followed by silence or topic change
+
+### Vague visual assessments
+- "That's quite terrible", "It's functional", "That looks off"
+- "Not great", "It's fine I guess", "That's ugly"
+- Qualitative judgments without specific details
+
+### UI interaction + unexpected result
+- "I can't anymore", "It won't let me", "Nothing happened"
+- "Wait, I just did that and now...", "It disappeared"
+- Actions described but outcomes implied ("I clicked save and... yeah")
+
+### Speaker referencing what others can see
+- "Can you see that?", "Do you see what I mean?"
+- "Look at this", "See how it...", "Right there"
+- Deictic references ("this", "that", "here") without antecedents
+
+### Handling
+Flag these as: `[Potential visual issue — may need screenshot/recording verification]`
+
+Include the video timestamp so users can scrub to the moment and see what was on screen. These issues may be:
+- Real bugs that are purely visual (e.g., white text on white background)
+- UI/UX issues that are hard to describe verbally
+- False positives — verify before creating Linear issues
+
+---
 
 ## Priority Signal Words
 

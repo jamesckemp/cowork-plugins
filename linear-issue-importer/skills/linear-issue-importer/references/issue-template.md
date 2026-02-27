@@ -27,7 +27,7 @@ Use the appropriate template based on the issue type. Fill in sections from the 
 
 ---
 
-[Source attribution line — see below]
+[Source attribution block — see below]
 ```
 
 ### When to use
@@ -55,7 +55,7 @@ Use the appropriate template based on the issue type. Fill in sections from the 
 
 ---
 
-[Source attribution line — see below]
+[Source attribution block — see below]
 ```
 
 ### When to use
@@ -83,7 +83,7 @@ Use the appropriate template based on the issue type. Fill in sections from the 
 
 ---
 
-[Source attribution line — see below]
+[Source attribution block — see below]
 ```
 
 ### When to use
@@ -93,45 +93,52 @@ Use the appropriate template based on the issue type. Fill in sections from the 
 
 ---
 
-## Source Attribution Line
+## Source Attribution Block
 
-Always include a source attribution at the end of every issue description. Choose the appropriate format:
+Always include a source attribution block at the end of every issue description. The block is built from two parts:
 
-### From a Granola note (with URL)
+1. **Source line** — always present. Identifies the meeting/document and date.
+2. **Supplementary links** — only included if the user provided them during Step 0b (e.g., summary post, video recording, related docs).
+
+### Format
+
 ```markdown
 ---
-
-This issue was identified in [Meeting Title](granola_url)
+Source: [Meeting Title](url) — YYYY-MM-DD
+[Summary post](url)
+[Video recording](url)
 ```
 
-### From a Granola transcript (with timestamp)
+Supplementary link lines are only included if the user provided them. If no supplementary links were provided, just the Source line appears:
+
 ```markdown
 ---
-
-This issue was identified in [Meeting Title](granola_url) (at ~MM:SS)
-
-> "Exact quote from transcript"
+Source: [Meeting Title](url) — YYYY-MM-DD
 ```
 
-### From a document (with file path)
-```markdown
----
+### Source line variants
 
-This issue was extracted from `filename.md`
+**From a Granola note or transcript (with URL):**
+```markdown
+Source: [Meeting Title](https://notes.granola.ai/d/{id}) — YYYY-MM-DD
 ```
 
-### From a document with a known URL
+**From a document (with file path, no URL):**
 ```markdown
----
+Source: `filename.md` — YYYY-MM-DD
+```
 
-This issue was discovered during the [Document Title](url)
+**From a document with a known URL:**
+```markdown
+Source: [Document Title](url) — YYYY-MM-DD
 ```
 
 ### Quoting the source
-When an exact quote is available (especially from transcripts), include it as a blockquote after the attribution line:
+
+When an exact quote is available (especially from transcripts), include it as a blockquote within the issue description (not in the attribution block). Include video timestamps when available:
 
 ```markdown
-> "The checkout flow breaks completely when you try to use a gift card with a coupon"
+> "The checkout flow breaks completely when you try to use a gift card with a coupon" (at 1:37:05 in recording)
 ```
 
-This helps reviewers trace the issue back to the original discussion.
+Video timestamps use `H:MM:SS` format calculated as offset from the first transcript utterance. This helps reviewers trace the issue back to the original discussion and jump to the right moment in any recording.
