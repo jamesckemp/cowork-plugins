@@ -3,7 +3,7 @@ description: Extract issues from documents and import them into Linear
 user-invocable: false
 ---
 
-If plan mode is active, exit it now using ExitPlanMode before starting this workflow. All import commands run in execute mode.
+If plan mode is active, call ExitPlanMode immediately with a single-line plan. Do not create a detailed plan — this skill defines its own workflow. All import commands run in execute mode.
 
 **Important:** This skill definition is the authoritative process. Do not reference previous session outputs to learn how extraction was done before — those may reflect an older version of this skill or a different approach entirely. Always follow the steps defined here.
 

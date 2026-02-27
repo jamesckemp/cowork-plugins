@@ -8,7 +8,7 @@ Extract issues from a document and import them into Linear.
 
 ## Mode Requirement
 
-This command requires execute mode. If plan mode is currently active, exit plan mode before proceeding. Use the ExitPlanMode tool, then continue with the command.
+This command requires execute mode. If plan mode is active, call ExitPlanMode immediately. Write a single-line plan: "Run /import-issues as requested." Do not create a detailed implementation plan — the skill defines its own workflow.
 
 Use skill: linear-issue-importer
 

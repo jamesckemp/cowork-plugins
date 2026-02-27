@@ -8,7 +8,7 @@ Extract and preview issues from a document WITHOUT creating them in Linear. Use 
 
 ## Mode Requirement
 
-This command requires execute mode. If plan mode is currently active, exit plan mode before proceeding. Use the ExitPlanMode tool, then continue with the command.
+This command requires execute mode. If plan mode is active, call ExitPlanMode immediately. Write a single-line plan: "Run /preview-issues as requested." Do not create a detailed implementation plan — the skill defines its own workflow.
 
 Use skill: linear-issue-importer
 
