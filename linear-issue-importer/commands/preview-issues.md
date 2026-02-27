@@ -16,6 +16,8 @@ The user wants to **preview only** — do NOT create any Linear issues.
 
 **File:** `$ARGUMENTS`
 
+**Do NOT pre-process the file.** If the file contents are already visible in this conversation (via @ reference), ignore them until the skill workflow reaches Step 1a. Do not summarize, extract quotes, or analyze the file before following the skill's Pre-Flight Check and workflow steps in order.
+
 Follow Step 0 (Gather Source Context) then Steps 1–6 of the workflow (Read & Extract, Internal Dedup, Build Working Document, Gather Linear Configuration, Linear Duplicate Search & Resolution, User Confirms Issues). Stop after Step 6. Do NOT proceed to Step 7 (import) or Step 8 (summary).
 
 After presenting the confirmed list, tell the user:

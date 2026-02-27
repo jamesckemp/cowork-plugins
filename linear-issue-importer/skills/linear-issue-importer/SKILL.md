@@ -91,7 +91,7 @@ Supplementary link lines are only included if the user provided them in Step 0b.
 
 #### Step 1a: Read file & detect document type
 
-1. Read the file from the provided path
+1. **Read the file from the provided path.** If the file contents are already in context (via an `@` reference), use what's there — but do NOT summarize, extract, or analyze ahead. Just proceed to type detection.
 2. Detect the document type:
    - **Granola JSON** — top-level `id`, `title`, `notes_markdown`, `transcript[]` fields
    - **Granola Obsidian note** — YAML frontmatter with `granola_id`, `title`, `granola_url`, `tags`; body uses `###` headings + bullet points

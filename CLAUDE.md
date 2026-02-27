@@ -16,7 +16,7 @@ This repo contains personal/custom plugins that aren't published to the official
 
 ### Current Plugins
 
-- **linear-issue-importer** (`v1.3.1`) - Extract issues from documents and import them into Linear
+- **linear-issue-importer** (`v1.3.2`) - Extract issues from documents and import them into Linear
 - **voiceprint** (`v1.5.1`) - Extract a linguistic fingerprint and generate a personalized voice profile and writer skill
 
 ## Plugin Structure

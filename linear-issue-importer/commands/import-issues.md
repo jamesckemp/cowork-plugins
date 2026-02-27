@@ -16,4 +16,6 @@ The user wants to extract issues from the following file and import them into Li
 
 **File:** `$ARGUMENTS`
 
+**Do NOT pre-process the file.** If the file contents are already visible in this conversation (via @ reference), ignore them until the skill workflow reaches Step 1a. Do not summarize, extract quotes, or analyze the file before following the skill's Pre-Flight Check and workflow steps in order.
+
 Follow the full workflow defined in the skill (Step 0 through Step 8). Start with Step 0 (gather source context), then proceed through all remaining steps.
